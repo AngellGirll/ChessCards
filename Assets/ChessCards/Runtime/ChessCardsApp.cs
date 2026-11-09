@@ -16,7 +16,16 @@ namespace ChessCards
         GUIStyle text, center, bold;
         bool initialized, location = true, rules, confirmLeave, credited;
         int selected = -1, page;
+        const float BotTurnDelay = .85f;
+        const float BotMoveDelay = .8f;
+        const float BotCardPreviewDelay = 1.4f;
         float nextBot;
+        int botTurn = -1, pendingBotCard = -1;
+        bool historyOpen;
+        Vector2 historyScroll;
+        string cardAnnouncement = "";
+        float cardAnnouncementUntil;
+        int announcementColor;
         List<ChessMove> promotions;
         List<ChessMove> selectedMoves = new List<ChessMove>();
         Vector2 rulesScroll;
@@ -45,22 +54,67 @@ namespace ChessCards
             int seed = Environment.TickCount;
             match = new CardMatch(seed); bot = new ChessBot(seed ^ 76543);
             selected = -1; page = 0; promotions = null; credited = false; location = false;
-            nextBot = Time.unscaledTime + .6f;
+            botTurn = -1; pendingBotCard = -1; historyOpen = false;
+            cardAnnouncement = ""; cardAnnouncementUntil = 0;
+            nextBot = Time.unscaledTime + BotTurnDelay;
         }
         void Update()
         {
             if (location || match == null) return;
             CreditResult();
-            if (rules || confirmLeave || promotions != null || match.Phase == MatchPhase.Finished || match.Actor != 1) return;
-            if (Time.unscaledTime < nextBot) return;
-            nextBot = Time.unscaledTime + .55f;
+            if (match.Phase == MatchPhase.Finished || match.Actor != 1)
+            { botTurn = -1; pendingBotCard = -1; return; }
+            float now = Time.unscaledTime;
+            if (rules || historyOpen || confirmLeave || promotions != null)
+            {
+                // A paused overlay must not make the next action overdue on resume.
+                nextBot = now + BotTurnDelay;
+                if (pendingBotCard >= 0) cardAnnouncementUntil = now + BotTurnDelay + BotMoveDelay;
+                return;
+            }
+            if (botTurn != match.Turn)
+            {
+                // Re-arm at every handoff, even after a long human turn or a skip.
+                botTurn = match.Turn; pendingBotCard = -1;
+                nextBot = now + BotTurnDelay;
+                return;
+            }
+            if (now < nextBot) return;
             if (match.Phase == MatchPhase.ChooseCard)
             {
-                int card = bot.ChooseCard(match);
-                if (card >= 0) match.PlayCard(card); else match.Draw();
+                if (pendingBotCard < 0)
+                {
+                    int card = bot.ChooseCard(match);
+                    if (card >= 0)
+                    {
+                        pendingBotCard = card;
+                        AnnounceCard(match.Hands[1][card], 1);
+                        nextBot = now + BotCardPreviewDelay;
+                        return; // Show the card before undoing or rotating the board.
+                    }
+                    match.Draw();
+                }
+                else
+                {
+                    int card = pendingBotCard; pendingBotCard = -1;
+                    if (!match.PlayCard(card))
+                    { nextBot = now + BotTurnDelay; return; }
+                }
             }
             else match.Move(bot.ChooseMove(match));
+            nextBot = now + BotMoveDelay;
             selected = -1; selectedMoves.Clear(); CreditResult();
+        }
+        void AnnounceCard(Card card, int actor)
+        {
+            string who = actor == 0 ? "Ты" : "Бот";
+            string effect = card.Kind == CardKind.Number ? card.Number + (card.Number == 1 ? " перемещение." : " перемещения подряд.") :
+                card.Kind == CardKind.Swap ? "меняемся армиями; затем 1 перемещение." :
+                card.Kind == CardKind.Undo ? "последнее перемещение возвращается назад." :
+                "1 перемещение, затем пропуск противника (кроме шаха).";
+            cardAnnouncement = who + ": «" + card.Title + "» — " + effect;
+            announcementColor = card.Color;
+            cardAnnouncementUntil = Time.unscaledTime + BotCardPreviewDelay + 1.2f;
         }
         void CreditResult()
         {
@@ -92,11 +146,12 @@ namespace ChessCards
             float oy = Screen.height - safe.y - safe.height + (safe.height - h * scale) / 2;
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(new Vector3(ox, oy, 0), Quaternion.identity, new Vector3(scale, scale, 1));
-            bool blocked = rules || confirmLeave || promotions != null;
+            bool blocked = rules || historyOpen || confirmLeave || promotions != null;
             GUI.enabled = !blocked;
             if (location) DrawLocation(); else DrawMatch();
             GUI.enabled = true;
             if (rules) DrawRules();
+            else if (historyOpen) DrawHistory();
             else if (confirmLeave) DrawLeave();
             else if (promotions != null) DrawPromotion();
             GUI.matrix = oldMatrix;
@@ -179,7 +234,8 @@ namespace ChessCards
         {
             if (match == null) { location = true; return; }
             if (Button(new Rect(28, 22, 136, 52), "Во двор", panel, true, 21)) confirmLeave = true;
-            Label(new Rect(182, 20, w - 370, 54), "ШАХМАТЫ × КАРТЫ", portrait ? 25 : 32, gold, false, true);
+            Label(new Rect(182, 20, w - 510, 54), portrait ? "ПАРТИЯ" : "ШАХМАТЫ × КАРТЫ", portrait ? 25 : 32, gold, false, true);
+            if (Button(new Rect(w - 306, 22, 132, 52), "История", panel, true, 20)) historyOpen = true;
             if (Button(new Rect(w - 160, 22, 132, 52), "Правила", panel, true, 20)) rules = true;
             Fill(new Rect(28, 90, w - 56, portrait ? 100 : 62), panel);
             string side = match.HumanSide == Side.White ? "белые" : "чёрные";
@@ -192,7 +248,13 @@ namespace ChessCards
             float right = portrait ? 32 : 590, top = portrait ? 875 : 180, width = portrait ? 656 : 650;
             DrawCards(right, top, width);
             float messageY = portrait ? 1110 : 470;
-            Label(new Rect(right, messageY, width, portrait ? 70 : 84), match.Message, 21, muted);
+            bool announcing = match.Phase != MatchPhase.Finished && Time.unscaledTime < cardAnnouncementUntil && cardAnnouncement.Length > 0;
+            if (announcing)
+            {
+                Fill(new Rect(right, messageY, width, portrait ? 70 : 84), cardColors[announcementColor]);
+                Label(new Rect(right + 12, messageY + 4, width - 24, portrait ? 62 : 76), cardAnnouncement, 21, ink);
+            }
+            else Label(new Rect(right, messageY, width, portrait ? 70 : 84), match.Message, 21, muted);
             float actionY = portrait ? 1200 : 650;
             if (match.Phase == MatchPhase.Finished)
             {
@@ -291,7 +353,7 @@ namespace ChessCards
                 Label(new Rect(r.x + 4, r.y + (portrait ? 53 : 80), r.width - 8, 55), sub, 16, ink, true);
                 bool old = GUI.enabled; GUI.enabled = old && playable;
                 if (GUI.Button(r, new GUIContent("", match.Actor == 0 ? match.UnavailableReason(i) : "Ход бота"), GUIStyle.none))
-                { match.PlayCard(i); selected = -1; selectedMoves.Clear(); CreditResult(); GUIUtility.ExitGUI(); }
+                { if (match.PlayCard(i)) AnnounceCard(card, 0); selected = -1; selectedMoves.Clear(); CreditResult(); GUIUtility.ExitGUI(); }
                 GUI.enabled = old;
             }
             if (count == 0) Label(new Rect(x, y + 112, width, 110), "Рука пуста. В свою очередь возьми карту.", 22, muted, true);
@@ -319,6 +381,20 @@ namespace ChessCards
                 if (Button(new Rect(r.x + 18 + i * (cw + 6), r.y + 112, cw, 120), titles[i], Hex("386579")))
                 { match.Move(promotions[i]); promotions = null; CreditResult(); GUIUtility.ExitGUI(); }
             }
+        }
+        void DrawHistory()
+        {
+            Rect r = new Rect(24, 24, w - 48, h - 48);
+            Overlay(r, "История действий");
+            Rect view = new Rect(r.x + 20, r.y + 88, r.width - 40, r.height - 186);
+            string content = "";
+            for (int i = 0; i < match.Log.Count; i++) content += (i + 1) + ". " + match.Log[i] + "\n\n";
+            GUIStyle style = new GUIStyle(text) { fontSize = portrait ? 23 : 21, alignment = TextAnchor.UpperLeft };
+            float contentHeight = style.CalcHeight(new GUIContent(content), view.width - 36) + 20;
+            historyScroll = GUI.BeginScrollView(view, historyScroll, new Rect(0, 0, view.width - 26, contentHeight));
+            GUI.Label(new Rect(4, 0, view.width - 36, contentHeight), content, style);
+            GUI.EndScrollView();
+            if (Button(new Rect(r.x + 24, r.y + r.height - 80, r.width - 48, 56), "Вернуться к партии", Hex("87643B"))) historyOpen = false;
         }
         void DrawRules()
         {

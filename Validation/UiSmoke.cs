@@ -149,9 +149,52 @@ static class UiSmoke
     static void Draw(ChessCardsApp app,string path)
     {UnityEngine.GUI.Begin();Call(app,"OnGUI");UnityEngine.GUI.Save(path);}
     static void Check(bool condition,string msg){if(!condition)throw new Exception(msg);}
+    static void BotTimingRegression()
+    {
+        var app=new ChessCardsApp();Call(app,"Awake");
+        var match=new CardMatch(7);
+        Set(app,"match",match);Set(app,"bot",new ChessBot(7));Set(app,"location",false);Set(app,"nextBot",0f);
+        UnityEngine.Time.unscaledTime=100f;Call(app,"Update"); // Human has thought for a long time.
+        match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));
+        Check(match.PlayCard(0)&&match.Move(new ChessMove(12,28)),"Could not prepare human turn");
+        match.Hands[1].Clear();match.Hands[1].Add(new Card(match.Top.Color,CardKind.Swap));
+        Call(app,"Update");
+        Check(match.HumanSide==Side.White && match.Hands[1].Count==1 && match.Phase==MatchPhase.ChooseCard,
+            "Bot acted immediately after a long human turn instead of waiting");
+        UnityEngine.Time.unscaledTime=100.84f;Call(app,"Update");
+        Check((int)Get(app,"pendingBotCard")==-1,"Bot preview ignored turn delay");
+        UnityEngine.Time.unscaledTime=100.86f;Call(app,"Update");
+        Check((int)Get(app,"pendingBotCard")==0 && match.HumanSide==Side.White && match.Hands[1].Count==1,
+            "Swap changed the board before its card announcement");
+        UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
+        Draw(app,"Validation/Previews/card-announcement-portrait.svg");
+        UnityEngine.Time.unscaledTime=101.5f;Call(app,"Update");
+        Check(match.HumanSide==Side.White,"Swap preview was too short");
+        Set(app,"historyOpen",true);UnityEngine.Time.unscaledTime=200f;Call(app,"Update");
+        Check(match.HumanSide==Side.White,"History failed to pause bot");
+        Set(app,"historyOpen",false);UnityEngine.Time.unscaledTime=200.01f;Call(app,"Update");
+        Check(match.HumanSide==Side.White,"Bot rushed when history closed");
+        UnityEngine.Time.unscaledTime=200.86f;Call(app,"Update");
+        Check(match.HumanSide==Side.Black && match.Hands[1].Count==0 && match.MovesPlayed==1,
+            "Announced swap did not apply once, separately from a chess move");
+        UnityEngine.Time.unscaledTime=201f;Call(app,"Update");
+        Check(match.MovesPlayed==1,"Bot chess move ignored effect delay");
+        UnityEngine.Time.unscaledTime=201.67f;Call(app,"Update");
+        Check(match.MovesPlayed==2,"Bot did not resume after announced effect");
+        UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
+        UnityEngine.GUI.Click(470,48);Draw(app,"Validation/Previews/transition.svg");
+        Check((bool)Get(app,"historyOpen"),"History button did not open");
+        Draw(app,"Validation/Previews/history-portrait.svg");
+        UnityEngine.GUI.Click(350,1200);Draw(app,"Validation/Previews/transition.svg");
+        Check(!(bool)Get(app,"historyOpen"),"History button did not close");
+        UnityEngine.Screen.width=1280;UnityEngine.Screen.height=720;
+        UnityEngine.Time.unscaledTime=0f;
+        Console.WriteLine("PASS regression: delayed first bot action, announcement before swap, pause/resume, one action per interval, history UI");
+    }
     static void Main()
     {
         Directory.CreateDirectory("Validation/Previews");
+        BotTimingRegression();
         var app=new ChessCardsApp();Call(app,"Awake");
         Draw(app,"Validation/Previews/location-landscape.svg");
         UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
