@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!129 &1
+PlayerSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 28
+  productGUID: 944c9c7a44c65566b9b6e5c17a2fd9e0
+  companyName: AngellGirll
+  productName: ChessCards
+  bundleVersion: 0.1.0
+  defaultScreenWidth: 1280
+  defaultScreenHeight: 720
+  defaultScreenWidthWeb: 1280
+  defaultScreenHeightWeb: 720
+  defaultIsNativeResolution: 0
+  defaultInterfaceOrientation: 4
+  allowedAutorotateToPortrait: 1
+  allowedAutorotateToPortraitUpsideDown: 1
+  allowedAutorotateToLandscapeRight: 1
+  allowedAutorotateToLandscapeLeft: 1
+  useOSAutorotation: 1
+  use32BitDisplayBuffer: 1
+  resizableWindow: 1
+  fullscreenMode: 3
+  runInBackground: 1
+  visibleInBackground: 1
+  colorSpace: 0
+  activeInputHandler: 0
+  applicationIdentifier:
+    Standalone: com.angellgirll.chesscards
+    Android: com.angellgirll.chesscards
+    iPhone: com.angellgirll.chesscards
+  overrideDefaultApplicationIdentifier: 1
+  AndroidBundleVersionCode: 1
+  AndroidMinSdkVersion: 23
+  AndroidTargetSdkVersion: 0
+  AndroidTargetArchitectures: 2
+  scriptingBackend:
+    Standalone: 0
+    Android: 1
+  scriptingDefineSymbols: {}
+  additionalCompilerArguments: {}
+  allowUnsafeCode: 0
