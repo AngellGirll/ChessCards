@@ -19,7 +19,7 @@ for name in required:
     assert (root / name).is_file(), 'Missing: ' + name
 
 version = (root / 'ProjectSettings/ProjectVersion.txt').read_text()
-assert 'm_EditorVersion: 6000.0.60f1' in version
+assert 'm_EditorVersion: 6000.6.8f1' in version
 manifest = json.loads((root / 'Packages/manifest.json').read_text())
 for module in ['imgui', 'jsonserialize', 'ui']:
     assert manifest['dependencies']['com.unity.modules.' + module] == '1.0.0'
