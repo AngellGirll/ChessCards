@@ -13,6 +13,8 @@ namespace ChessCards
         RestorationProgress progress;
         Font font;
         Texture2D[,] pieces = new Texture2D[2, 7];
+        readonly Texture2D[] cardFaces = new Texture2D[6];
+        Texture2D cardBody, cardBack;
         GUIStyle text, center, bold;
         bool initialized, location = true, rules, confirmLeave, credited;
         int selected = -1, page;
@@ -33,12 +35,17 @@ namespace ChessCards
         bool portrait;
         float w, h;
         readonly Color background = Hex("171E2B"), panel = Hex("252E40"), ink = Hex("F7F1E4"), muted = Hex("AAB4C5"), gold = Hex("EBC270");
-        readonly Color[] cardColors = { Hex("AF4652"), Hex("386FA4"), Hex("448B72"), Hex("AA842D") };
+        readonly Color[] cardColors = { Hex("CA5360"), Hex("4D80B6"), Hex("519B81"), Hex("D9AD4C") };
         static Color Hex(string s) { return new Color(Convert.ToInt32(s.Substring(0, 2), 16) / 255f, Convert.ToInt32(s.Substring(2, 2), 16) / 255f, Convert.ToInt32(s.Substring(4, 2), 16) / 255f); }
         void Awake()
         {
             Application.targetFrameRate = 60;
             font = Resources.Load<Font>("ChessCards/UI");
+            cardBody = Resources.Load<Texture2D>("ChessCards/Cards/Body");
+            cardBack = Resources.Load<Texture2D>("ChessCards/Cards/Back");
+            string[] faces = { "1", "2", "3", "Swap", "Undo", "Skip" };
+            for (int i = 0; i < faces.Length; i++)
+                cardFaces[i] = Resources.Load<Texture2D>("ChessCards/Cards/Face" + faces[i]);
             for (int side = 0; side < 2; side++) for (int kind = 1; kind <= 6; kind++)
                 pieces[side, kind] = Resources.Load<Texture2D>("ChessCards/" + (side == 0 ? "White" : "Black") + (PieceType)kind);
             try { progress = JsonUtility.FromJson<RestorationProgress>(PlayerPrefs.GetString(SaveKey, "{}")); }
@@ -242,23 +249,24 @@ namespace ChessCards
             string phase = match.Phase == MatchPhase.Finished ? match.Result : (match.Actor == 0 ? "Твоя очередь" : "Ход бота") + "  •  " + (match.Phase == MatchPhase.ChooseCard ? "выбор карты" : "перемещений: " + match.Remaining);
             Label(new Rect(42, 94, w - 84, portrait ? 48 : 30), phase, portrait ? 23 : 24, match.Actor == 0 ? gold : ink, false, true);
             Label(new Rect(42, portrait ? 140 : 124, w - 84, 34), "Ты: " + side + "  •  Очередь №" + match.Turn + "  •  Карт у бота: " + match.Hands[1].Count, portrait ? 20 : 18, muted);
-            float size = portrait ? 624 : 496;
-            Rect board = new Rect(portrait ? 48 : 48, portrait ? 218 : 190, size, size);
+            float size = portrait ? 560 : 496;
+            Rect board = new Rect(portrait ? 80 : 48, portrait ? 210 : 190, size, size);
             DrawBoard(board);
-            float right = portrait ? 32 : 590, top = portrait ? 875 : 180, width = portrait ? 656 : 650;
+            float right = portrait ? 32 : 590, top = portrait ? 802 : 180, width = portrait ? 656 : 650;
             DrawCards(right, top, width);
-            float messageY = portrait ? 1110 : 470;
+            float messageY = portrait ? 1126 : 508;
+            float messageHeight = match.Phase == MatchPhase.Finished && portrait ? 30 : portrait ? 64 : 70;
             bool announcing = match.Phase != MatchPhase.Finished && Time.unscaledTime < cardAnnouncementUntil && cardAnnouncement.Length > 0;
             if (announcing)
             {
-                Fill(new Rect(right, messageY, width, portrait ? 70 : 84), cardColors[announcementColor]);
-                Label(new Rect(right + 12, messageY + 4, width - 24, portrait ? 62 : 76), cardAnnouncement, 21, ink);
+                Fill(new Rect(right, messageY, width, messageHeight), cardColors[announcementColor]);
+                Label(new Rect(right + 12, messageY + 4, width - 24, messageHeight - 8), cardAnnouncement, 21, ink);
             }
-            else Label(new Rect(right, messageY, width, portrait ? 70 : 84), match.Message, 21, muted);
+            else Label(new Rect(right, messageY, width, messageHeight), match.Message, 21, muted);
             float actionY = portrait ? 1200 : 650;
             if (match.Phase == MatchPhase.Finished)
             {
-                Label(new Rect(right, portrait ? 1150 : 568, width, 42), match.Winner == 0 ? "+100 монет уже зачислено" : "Можно попробовать ещё раз", 22, gold, true);
+                Label(new Rect(right, portrait ? 1160 : 594, width, 32), match.Winner == 0 ? "+100 монет уже зачислено" : "Можно попробовать ещё раз", 22, gold, true);
                 if (Button(new Rect(right, actionY, width * .56f, 54), "Вернуться во двор", Hex("87643B"))) { location = true; GUIUtility.ExitGUI(); }
                 if (Button(new Rect(right + width * .59f, actionY, width * .41f, 54), "Ещё партия")) { StartMatch(); GUIUtility.ExitGUI(); }
             }
@@ -269,12 +277,12 @@ namespace ChessCards
                 { match.Draw(); page = Math.Max(0, (match.Hands[0].Count - 1) / 4); selected = -1; CreditResult(); GUIUtility.ExitGUI(); }
                 Label(new Rect(right + width * .59f, actionY, width * .41f, 54), "Колода: " + match.DeckCount + "\nСброс: " + match.DiscardCount, 18, muted, true);
             }
-            if (!portrait)
+            if (!portrait && match.Phase != MatchPhase.Finished)
             {
                 string lines = "";
                 int start = Math.Max(0, match.Log.Count - 2);
                 for (int i = start; i < match.Log.Count; i++) lines += match.Log[i] + "\n";
-                Label(new Rect(right, 566, width, 74), lines, 17, muted);
+                Label(new Rect(right, 584, width, 56), lines, 17, muted);
             }
         }
         void DrawBoard(Rect r)
@@ -328,35 +336,61 @@ namespace ChessCards
             selected = square;
             foreach (var m in match.Board.LegalMoves(match.HumanSide)) if (m.From == square) selectedMoves.Add(m);
         }
+        void DrawCardFace(Rect r, Card card, bool highlighted, float opacity = 1)
+        {
+            int face = card.Kind == CardKind.Number ? card.Number - 1 : (int)card.Kind + 2;
+            Texture2D art = face >= 0 && face < cardFaces.Length ? cardFaces[face] : null;
+            if (cardBody == null || art == null)
+            {
+                Fill(r, cardColors[card.Color]);
+                Label(r, card.Title, 26, ink, true);
+                return;
+            }
+            Color old = GUI.color;
+            GUI.color = new Color(0, 0, 0, .26f * opacity);
+            GUI.DrawTexture(new Rect(r.x + 4, r.y + 6, r.width, r.height), cardBody);
+            if (highlighted)
+            {
+                GUI.color = new Color(gold.r, gold.g, gold.b, .92f);
+                GUI.DrawTexture(new Rect(r.x - 4, r.y - 4, r.width + 8, r.height + 8), cardBody);
+            }
+            Color color = cardColors[card.Color];
+            GUI.color = new Color(color.r, color.g, color.b, opacity);
+            GUI.DrawTexture(r, cardBody);
+            GUI.color = new Color(1, 1, 1, opacity);
+            GUI.DrawTexture(r, art);
+            GUI.color = old;
+        }
         void DrawCards(float x, float y, float width)
         {
-            Card top = match.Top;
-            Fill(new Rect(x, y, width, 54), panel);
-            Fill(new Rect(x, y, 14, 54), cardColors[top.Color]);
-            Label(new Rect(x + 26, y, width - 32, 54), "Сброс: " + top.ColorName + " «" + top.Title + "»", 23, ink, false, true);
+            Card shown = match.Top;
+            bool preview = match.Actor == 1 && pendingBotCard >= 0 && pendingBotCard < match.Hands[1].Count;
+            if (preview) shown = match.Hands[1][pendingBotCard];
+            Fill(new Rect(x, y, width, 94), panel);
+            DrawCardFace(new Rect(x + 14, y + 5, 58, 81), shown, preview);
+            Label(new Rect(x + 90, y + 8, width - 202, 25), preview ? "БОТ ПОКАЗЫВАЕТ КАРТУ" : "ВЕРХНЯЯ КАРТА СБРОСА", 16, preview ? gold : muted);
+            Label(new Rect(x + 90, y + 34, width - 202, 40), shown.ColorName + " «" + shown.Title + "»", 24, ink, false, true);
+            if (cardBack != null) GUI.DrawTexture(new Rect(x + width - 67, y + 7, 46, 64), cardBack);
+            Label(new Rect(x + width - 90, y + 72, 90, 20), "БОТ ×" + match.Hands[1].Count, 15, muted, true);
             int count = match.Hands[0].Count, pages = Math.Max(1, (count + 3) / 4);
             page = Math.Min(page, pages - 1);
-            Label(new Rect(x, y + 61, width - 150, 32), "Твоя рука: " + count + "  •  " + (page + 1) + "/" + pages, 19, muted);
-            if (Button(new Rect(x + width - 140, y + 60, 62, 36), "←", panel, page > 0)) page--;
-            if (Button(new Rect(x + width - 64, y + 60, 62, 36), "→", panel, page < pages - 1)) page++;
-            float gap = 12, cw = (width - 3 * gap) / 4;
+            Label(new Rect(x, y + 101, width - 150, 34), "Твоя рука: " + count + "  •  " + (page + 1) + "/" + pages, 19, muted);
+            if (Button(new Rect(x + width - 140, y + 100, 62, 36), "←", panel, page > 0)) page--;
+            if (Button(new Rect(x + width - 64, y + 100, 62, 36), "→", panel, page < pages - 1)) page++;
+            float gap = 12, slotWidth = (width - 3 * gap) / 4;
             for (int slot = 0; slot < 4; slot++)
             {
                 int i = page * 4 + slot; if (i >= count) break;
                 Card card = match.Hands[0][i];
                 bool playable = match.Actor == 0 && match.CanPlay(i);
-                Rect r = new Rect(x + slot * (cw + gap), y + 106, cw, portrait ? 114 : 154);
-                Fill(new Rect(r.x - 2, r.y - 2, r.width + 4, r.height + 4), playable ? gold : panel);
-                Fill(r, playable ? cardColors[card.Color] : Color.Lerp(cardColors[card.Color], background, .57f));
-                Label(new Rect(r.x + 4, r.y + 8, r.width - 8, portrait ? 42 : 62), card.Title, card.Kind == CardKind.Number ? 40 : 18, ink, true, card.Kind == CardKind.Number);
-                string sub = card.Kind == CardKind.Number ? card.Number + " перемещ." : card.Kind == CardKind.Swap ? "Сменить сторону\n+1 перемещение" : card.Kind == CardKind.Undo ? "Откатить ход\n+1 перемещение" : "+1 перемещение\nПропуск врага";
-                Label(new Rect(r.x + 4, r.y + (portrait ? 53 : 80), r.width - 8, 55), sub, 16, ink, true);
+                Rect r = new Rect(x + slot * (slotWidth + gap) + (slotWidth - 120) / 2, y + 146, 120, 168);
+                DrawCardFace(r, card, playable, playable ? 1 : .66f);
                 bool old = GUI.enabled; GUI.enabled = old && playable;
                 if (GUI.Button(r, new GUIContent("", match.Actor == 0 ? match.UnavailableReason(i) : "Ход бота"), GUIStyle.none))
                 { if (match.PlayCard(i)) AnnounceCard(card, 0); selected = -1; selectedMoves.Clear(); CreditResult(); GUIUtility.ExitGUI(); }
                 GUI.enabled = old;
             }
-            if (count == 0) Label(new Rect(x, y + 112, width, 110), "Рука пуста. В свою очередь возьми карту.", 22, muted, true);
+            if (count == 0) Label(new Rect(x, y + 152, width, 150), "Рука пуста. В свою очередь возьми карту.", 22, muted, true);
         }
         void Overlay(Rect r, string title)
         {

@@ -101,7 +101,16 @@ namespace UnityEngine
         public static void DrawTexture(Rect r,Texture2D texture,ScaleMode mode=ScaleMode.StretchToFill)
         {
             if(texture.Path==null) svg.Append("<rect x='"+(r.x+ox)+"' y='"+(r.y+oy)+"' width='"+r.width+"' height='"+r.height+"' fill='"+color.Css()+"' opacity='"+color.a+"'/>");
-            else svg.Append("<image x='"+(r.x+ox)+"' y='"+(r.y+oy)+"' width='"+r.width+"' height='"+r.height+"' href='data:image/png;base64,"+Convert.ToBase64String(File.ReadAllBytes(texture.Path))+"'/>");
+            else
+            {
+                string image="<image x='"+(r.x+ox)+"' y='"+(r.y+oy)+"' width='"+r.width+"' height='"+r.height+"' href='data:image/png;base64,"+Convert.ToBase64String(File.ReadAllBytes(texture.Path))+"'/>";
+                if(System.IO.Path.GetFileName(texture.Path)=="Body.png")
+                {
+                    string id="mask"+(clip++);
+                    svg.Append("<defs><mask id='"+id+"'>"+image+"</mask></defs><rect x='"+(r.x+ox)+"' y='"+(r.y+oy)+"' width='"+r.width+"' height='"+r.height+"' fill='"+color.Css()+"' opacity='"+color.a+"' mask='url(#"+id+")'/>");
+                }
+                else svg.Append("<g opacity='"+color.a+"'>"+image+"</g>");
+            }
         }
         public static List<string> Wrap(string t,float width,int size)
         {
@@ -196,6 +205,8 @@ static class UiSmoke
         Directory.CreateDirectory("Validation/Previews");
         BotTimingRegression();
         var app=new ChessCardsApp();Call(app,"Awake");
+        Check(Get(app,"cardBody")!=null && Get(app,"cardBack")!=null,"Card body/back resource missing");
+        foreach(var face in (UnityEngine.Texture2D[])Get(app,"cardFaces")) Check(face!=null,"Card face resource missing");
         Draw(app,"Validation/Previews/location-landscape.svg");
         UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
         Draw(app,"Validation/Previews/location-portrait.svg");
@@ -216,10 +227,10 @@ static class UiSmoke
         bool white=match.HumanSide==Side.White;
         int fromFile=white?move.From%8:7-move.From%8,fromRank=white?7-move.From/8:move.From/8;
         int toFile=white?move.To%8:7-move.To%8,toRank=white?7-move.To/8:move.To/8;
-        UnityEngine.GUI.Click(48+fromFile*78+39,218+fromRank*78+39);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(80+fromFile*70+35,210+fromRank*70+35);Draw(app,"Validation/Previews/transition.svg");
         Check((int)Get(app,"selected")==move.From,"Piece click failed");
         Draw(app,"Validation/Previews/board-portrait.svg");
-        UnityEngine.GUI.Click(48+toFile*78+39,218+toRank*78+39);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(80+toFile*70+35,210+toRank*70+35);Draw(app,"Validation/Previews/transition.svg");
         Check(match.MovesPlayed==1,"Destination click failed");
         UnityEngine.Screen.width=1280;UnityEngine.Screen.height=720;
         Draw(app,"Validation/Previews/board-landscape.svg");
