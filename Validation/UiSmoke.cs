@@ -200,6 +200,56 @@ static class UiSmoke
         UnityEngine.Time.unscaledTime=0f;
         Console.WriteLine("PASS regression: delayed first bot action, announcement before swap, pause/resume, one action per interval, history UI");
     }
+    static void CheckersModeSmoke()
+    {
+        UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
+        var app=new ChessCardsApp();Call(app,"Awake");
+        UnityEngine.GUI.Click(150,1160);Draw(app,"Validation/Previews/transition.svg");
+        Check((bool)Get(app,"modeSelection"),"Checkers selection did not open");
+        UnityEngine.GUI.Click(300,880);Draw(app,"Validation/Previews/transition.svg");
+        Check(!(bool)Get(app,"modeSelection") && (bool)Get(app,"location"),"Mode cancel should stay in courtyard");
+        UnityEngine.GUI.Click(150,1160);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(300,700);Draw(app,"Validation/Previews/transition.svg");
+        var match=(CardMatch)Get(app,"match");
+        Check(match.Mode==GameMode.Checkers && !(bool)Get(app,"location"),"Checkers choice did not start checkers");
+        var pieces=(UnityEngine.Texture2D[,])Get(app,"pieces");
+        Check(pieces[0,7]!=null && pieces[1,7]!=null && pieces[0,8]!=null && pieces[1,8]!=null,"Checker resources missing");
+        match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));
+        UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(255,595);Draw(app,"Validation/Previews/transition.svg");
+        Check((int)Get(app,"selected")==18,"Checker selection click failed");
+        UnityEngine.GUI.Click(325,525);Draw(app,"Validation/Previews/transition.svg");
+        Check(match.MovesPlayed==1 && match.Board.Squares[27].Type==PieceType.Checker,"Checker destination click failed");
+        Draw(app,"Validation/Previews/checkers-portrait.svg");
+        UnityEngine.Screen.width=1280;UnityEngine.Screen.height=720;
+        Draw(app,"Validation/Previews/checkers-landscape.svg");
+        Set(app,"location",true);Set(app,"modeSelection",true);Draw(app,"Validation/Previews/mode-selection-landscape.svg");
+        Set(app,"modeSelection",false);Set(app,"location",false);
+        var board=new ChessPosition(GameMode.Checkers){CastleRights=0};
+        board.Squares[18]=new Piece(PieceType.Checker,Side.White);
+        board.Squares[27]=new Piece(PieceType.Checker,Side.Black);
+        board.Squares[45]=new Piece(PieceType.Checker,Side.Black);
+        board.Squares[63]=new Piece(PieceType.Checker,Side.Black);
+        match=new CardMatch(3,board);Set(app,"match",match);
+        match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));
+        UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
+        UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(255,595);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(395,455);Draw(app,"Validation/Previews/transition.svg");
+        Check((int)Get(app,"selected")==36 && match.Board.ForcedCaptureFrom==36 && match.Remaining==1,"Capture continuation not auto-selected");
+        Draw(app,"Validation/Previews/checkers-capture-portrait.svg");
+        UnityEngine.GUI.Click(535,315);Draw(app,"Validation/Previews/transition.svg");
+        Check(match.MovesPlayed==1 && match.Actor==1 && match.Board.PendingCaptured==0,"UI chain did not complete as one move");
+        Set(app,"rules",true);Draw(app,"Validation/Previews/checkers-rules-portrait.svg");Set(app,"rules",false);
+        var won=new ChessPosition(GameMode.Checkers){CastleRights=0};won.Squares[18]=new Piece(PieceType.Checker,Side.White);
+        match=new CardMatch(3,won);match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));match.PlayCard(0);match.Move(new ChessMove(18,27));
+        Check(match.Phase==MatchPhase.Finished,"Could not prepare checkers replay");
+        Set(app,"match",match);Set(app,"credited",true);
+        UnityEngine.GUI.Click(550,1220);Draw(app,"Validation/Previews/transition.svg");
+        Check(((CardMatch)Get(app,"match")).Mode==GameMode.Checkers,"Replay lost selected mode");
+        UnityEngine.Screen.width=1280;UnityEngine.Screen.height=720;
+        Console.WriteLine("PASS game mode selector, cancel, checkers input, capture continuation, rules and same-mode replay");
+    }
     static void Main()
     {
         Directory.CreateDirectory("Validation/Previews");
@@ -211,7 +261,10 @@ static class UiSmoke
         UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
         Draw(app,"Validation/Previews/location-portrait.svg");
         UnityEngine.GUI.Click(150,1160);Draw(app,"Validation/Previews/transition.svg");
-        Check(!(bool)Get(app,"location"),"Play click failed");
+        Check((bool)Get(app,"modeSelection") && (bool)Get(app,"location"),"Play must open mode selection");
+        Draw(app,"Validation/Previews/mode-selection-portrait.svg");
+        UnityEngine.GUI.Click(300,520);Draw(app,"Validation/Previews/transition.svg");
+        Check(!(bool)Get(app,"location") && ((CardMatch)Get(app,"match")).Mode==GameMode.Chess,"Chess choice failed");
         var match=(CardMatch)Get(app,"match");
         var playable=match.PlayableCards();
         while(playable.Count==0)
@@ -245,6 +298,7 @@ static class UiSmoke
         Draw(app,"Validation/Previews/repaired-landscape.svg");
         var reloaded=new ChessCardsApp();Call(reloaded,"Awake");var saved=(RestorationProgress)Get(reloaded,"progress");
         Check(saved.Coins==40&&saved.Bench&&saved.Wins==1,"Progress save/reload failed");
+        CheckersModeSmoke();
         Console.WriteLine("PASS runtime source compilation against isolated adapter; GUI clicks, card selection, board input, mate reward, repair and save/reload");
         Console.WriteLine("Layout previews emitted. This does not replace testing in Unity Editor or a device build.");
     }

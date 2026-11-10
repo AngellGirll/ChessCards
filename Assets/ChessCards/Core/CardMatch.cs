@@ -22,6 +22,7 @@ namespace ChessCards
     public sealed class CardMatch
     {
         public ChessPosition Board { get; private set; }
+        public GameMode Mode { get { return Board.Mode; } }
         public readonly List<Card>[] Hands = { new List<Card>(), new List<Card>() };
         readonly List<Card> deck = new List<Card>();
         readonly List<Card> discard = new List<Card>();
@@ -47,9 +48,9 @@ namespace ChessCards
         public Side SideFor(int actor) { return actor == 0 ? HumanSide : ChessPosition.Other(HumanSide); }
         public int OwnerOf(Side side) { return side == HumanSide ? 0 : 1; }
 
-        public CardMatch(int seed, ChessPosition position = null)
+        public CardMatch(int seed, ChessPosition position = null, GameMode mode = GameMode.Chess)
         {
-            random = new Random(seed); Board = position == null ? ChessPosition.Initial() : position.Clone();
+            random = new Random(seed); Board = position == null ? ChessPosition.Initial(mode) : position.Clone();
             HumanSide = Side.White; Actor = 0; Winner = -1; Turn = 1;
             for (int color = 0; color < 4; color++)
             {
@@ -142,8 +143,25 @@ namespace ChessCards
                 if (m.From == wanted.From && m.To == wanted.To && m.Promotion == wanted.Promotion) { found = true; break; }
             if (!found) return false;
             Side mover = ActiveSide;
-            history.Push(Board.Clone()); Board.ApplyUnchecked(wanted); LastMove = wanted;
+            // All jumps of one checkers capture belong to a single reversible move.
+            if (Board.ForcedCaptureFrom < 0) history.Push(Board.Clone());
+            Board.ApplyUnchecked(wanted); LastMove = wanted;
+            if (Mode == GameMode.Checkers && Board.ForcedCaptureFrom >= 0)
+            {
+                SetMessage((Actor == 0 ? "Ты: " : "Бот: ") + wanted + " — продолжи взятие этой же шашкой.");
+                return true; // Do not spend the next card move or hand off mid-capture.
+            }
             MovesPlayed++; Remaining--;
+            if (Mode == GameMode.Checkers)
+            {
+                SetMessage((Actor == 0 ? "Ты: " : "Бот: ") + wanted + ". Осталось перемещений: " + Remaining + ".");
+                if (Board.LegalMoves(ChessPosition.Other(mover)).Count == 0)
+                { Finish(Actor, "У противника нет шашек или допустимых ходов"); return true; }
+                if (Board.WhiteKingQuietMoves >= 15 && Board.BlackKingQuietMoves >= 15)
+                { Finish(-1, "По 15 ходов дамками без взятия и движения простых шашек"); return true; }
+                if (Remaining == 0 || Board.LegalMoves(mover).Count == 0) EndTurn();
+                return true;
+            }
             Side enemy = ChessPosition.Other(mover);
             bool check = Board.InCheck(enemy);
             var replies = Board.LegalMoves(enemy);
@@ -168,7 +186,10 @@ namespace ChessCards
         {
             if (Phase == MatchPhase.Finished) return;
             if (Board.LegalMoves(ActiveSide).Count == 0)
-                Finish(Board.InCheck(ActiveSide) ? 1 - Actor : -1, Board.InCheck(ActiveSide) ? "Мат" : "Пат");
+            {
+                if (Mode == GameMode.Checkers) Finish(1 - Actor, "Нет шашек или допустимых ходов");
+                else Finish(Board.InCheck(ActiveSide) ? 1 - Actor : -1, Board.InCheck(ActiveSide) ? "Мат" : "Пат");
+            }
         }
         void Finish(int winner, string reason)
         {

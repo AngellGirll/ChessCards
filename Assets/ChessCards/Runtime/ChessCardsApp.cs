@@ -9,10 +9,12 @@ namespace ChessCards
     {
         const string SaveKey = "ChessCards.Restoration.v1";
         CardMatch match;
+        GameMode selectedMode = GameMode.Chess;
+        bool modeSelection;
         ChessBot bot;
         RestorationProgress progress;
         Font font;
-        Texture2D[,] pieces = new Texture2D[2, 7];
+        Texture2D[,] pieces = new Texture2D[2, 9];
         readonly Texture2D[] cardFaces = new Texture2D[6];
         Texture2D cardBody, cardBack;
         GUIStyle text, center, bold;
@@ -48,6 +50,11 @@ namespace ChessCards
                 cardFaces[i] = Resources.Load<Texture2D>("ChessCards/Cards/Face" + faces[i]);
             for (int side = 0; side < 2; side++) for (int kind = 1; kind <= 6; kind++)
                 pieces[side, kind] = Resources.Load<Texture2D>("ChessCards/" + (side == 0 ? "White" : "Black") + (PieceType)kind);
+            for (int side = 0; side < 2; side++)
+            {
+                pieces[side, (int)PieceType.Checker] = Resources.Load<Texture2D>("ChessCards/" + (side == 0 ? "White" : "Black") + "Checker");
+                pieces[side, (int)PieceType.CrownedChecker] = Resources.Load<Texture2D>("ChessCards/" + (side == 0 ? "White" : "Black") + "CrownedChecker");
+            }
             try { progress = JsonUtility.FromJson<RestorationProgress>(PlayerPrefs.GetString(SaveKey, "{}")); }
             catch (Exception) { progress = new RestorationProgress(); }
             if (progress == null) progress = new RestorationProgress();
@@ -59,7 +66,8 @@ namespace ChessCards
         void StartMatch()
         {
             int seed = Environment.TickCount;
-            match = new CardMatch(seed); bot = new ChessBot(seed ^ 76543);
+            match = new CardMatch(seed, null, selectedMode); bot = new ChessBot(seed ^ 76543);
+            modeSelection = false;
             selected = -1; page = 0; promotions = null; credited = false; location = false;
             botTurn = -1; pendingBotCard = -1; historyOpen = false;
             cardAnnouncement = ""; cardAnnouncementUntil = 0;
@@ -118,7 +126,7 @@ namespace ChessCards
             string effect = card.Kind == CardKind.Number ? card.Number + (card.Number == 1 ? " перемещение." : " перемещения подряд.") :
                 card.Kind == CardKind.Swap ? "меняемся армиями; затем 1 перемещение." :
                 card.Kind == CardKind.Undo ? "последнее перемещение возвращается назад." :
-                "1 перемещение, затем пропуск противника (кроме шаха).";
+                "1 перемещение, затем пропуск противника" + (match.Mode == GameMode.Chess ? " (кроме шаха)." : ".");
             cardAnnouncement = who + ": «" + card.Title + "» — " + effect;
             announcementColor = card.Color;
             cardAnnouncementUntil = Time.unscaledTime + BotCardPreviewDelay + 1.2f;
@@ -153,11 +161,12 @@ namespace ChessCards
             float oy = Screen.height - safe.y - safe.height + (safe.height - h * scale) / 2;
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(new Vector3(ox, oy, 0), Quaternion.identity, new Vector3(scale, scale, 1));
-            bool blocked = rules || historyOpen || confirmLeave || promotions != null;
+            bool blocked = modeSelection || rules || historyOpen || confirmLeave || promotions != null;
             GUI.enabled = !blocked;
             if (location) DrawLocation(); else DrawMatch();
             GUI.enabled = true;
-            if (rules) DrawRules();
+            if (modeSelection) DrawModeSelection();
+            else if (rules) DrawRules();
             else if (historyOpen) DrawHistory();
             else if (confirmLeave) DrawLeave();
             else if (promotions != null) DrawPromotion();
@@ -205,7 +214,7 @@ namespace ChessCards
             }
             Label(new Rect(32, portrait ? 1045 : 592, w - 64, 58), notice, 21, muted);
             float by = portrait ? 1130 : 654;
-            if (Button(new Rect(32, by, portrait ? 420 : 690, 64 - (portrait ? 0 : 10)), "ИГРАТЬ  •  награда 100 монет", Hex("87643B"), true, 24)) { StartMatch(); GUIUtility.ExitGUI(); }
+            if (Button(new Rect(32, by, portrait ? 420 : 690, 64 - (portrait ? 0 : 10)), "ИГРАТЬ  •  награда 100 монет", Hex("87643B"), true, 24)) { modeSelection = true; GUIUtility.ExitGUI(); }
             if (Button(new Rect(portrait ? 470 : 1000, by, portrait ? 218 : 248, 64 - (portrait ? 0 : 10)), "Правила", panel)) rules = true;
         }
         void DrawCourtyard(Rect r)
@@ -241,12 +250,12 @@ namespace ChessCards
         {
             if (match == null) { location = true; return; }
             if (Button(new Rect(28, 22, 136, 52), "Во двор", panel, true, 21)) confirmLeave = true;
-            Label(new Rect(182, 20, w - 510, 54), portrait ? "ПАРТИЯ" : "ШАХМАТЫ × КАРТЫ", portrait ? 25 : 32, gold, false, true);
+            Label(new Rect(182, 20, w - 510, 54), portrait ? (match.Mode == GameMode.Checkers ? "ШАШКИ" : "ШАХМАТЫ") : (match.Mode == GameMode.Checkers ? "ШАШКИ × КАРТЫ" : "ШАХМАТЫ × КАРТЫ"), portrait ? 25 : 32, gold, false, true);
             if (Button(new Rect(w - 306, 22, 132, 52), "История", panel, true, 20)) historyOpen = true;
             if (Button(new Rect(w - 160, 22, 132, 52), "Правила", panel, true, 20)) rules = true;
             Fill(new Rect(28, 90, w - 56, portrait ? 100 : 62), panel);
             string side = match.HumanSide == Side.White ? "белые" : "чёрные";
-            string phase = match.Phase == MatchPhase.Finished ? match.Result : (match.Actor == 0 ? "Твоя очередь" : "Ход бота") + "  •  " + (match.Phase == MatchPhase.ChooseCard ? "выбор карты" : "перемещений: " + match.Remaining);
+            string phase = match.Phase == MatchPhase.Finished ? match.Result : (match.Actor == 0 ? "Твоя очередь" : "Ход бота") + "  •  " + (match.Phase == MatchPhase.ChooseCard ? "выбор карты" : match.Board.ForcedCaptureFrom >= 0 ? "продолжи взятие" : "перемещений: " + match.Remaining);
             Label(new Rect(42, 94, w - 84, portrait ? 48 : 30), phase, portrait ? 23 : 24, match.Actor == 0 ? gold : ink, false, true);
             Label(new Rect(42, portrait ? 140 : 124, w - 84, 34), "Ты: " + side + "  •  Очередь №" + match.Turn + "  •  Карт у бота: " + match.Hands[1].Count, portrait ? 20 : 18, muted);
             float size = portrait ? 560 : 496;
@@ -309,8 +318,13 @@ namespace ChessCards
                 if (p.Type != PieceType.None)
                 {
                     Texture2D icon = pieces[(int)p.Side, (int)p.Type];
+                    bool captured = match.Mode == GameMode.Checkers && CheckersRules.Pending(board, square);
+                    Color oldColor = GUI.color;
+                    if (captured) GUI.color = new Color(1, 1, 1, .35f);
                     if (icon != null) GUI.DrawTexture(new Rect(tile.x + 4, tile.y + 4, cell - 8, cell - 8), icon, ScaleMode.ScaleToFit);
                     else Label(tile, p.Type.ToString().Substring(0, 1), 34, p.Side == Side.White ? Color.white : Color.black, true);
+                    GUI.color = oldColor;
+                    if (captured) Label(tile, "×", 36, Hex("AF4652"), true);
                 }
                 bool active = match.Actor == 0 && match.Phase == MatchPhase.MovePieces;
                 if (active && GUI.Button(tile, GUIContent.none, GUIStyle.none)) { SelectSquare(square); GUIUtility.ExitGUI(); }
@@ -329,12 +343,19 @@ namespace ChessCards
             {
                 if (choices[0].Promotion != PieceType.None) promotions = choices;
                 else { match.Move(choices[0]); CreditResult(); }
-                selected = -1; selectedMoves.Clear(); return;
+                selected = -1; selectedMoves.Clear(); SelectForcedCapture(); return;
             }
+            if (match.Board.ForcedCaptureFrom >= 0) { SelectForcedCapture(); return; }
             Piece p = match.Board.Squares[square]; selectedMoves.Clear();
             if (p.Type == PieceType.None || p.Side != match.HumanSide || selected == square) { selected = -1; return; }
             selected = square;
             foreach (var m in match.Board.LegalMoves(match.HumanSide)) if (m.From == square) selectedMoves.Add(m);
+        }
+        void SelectForcedCapture()
+        {
+            if (match.Actor != 0 || match.Phase != MatchPhase.MovePieces || match.Board.ForcedCaptureFrom < 0) return;
+            selected = match.Board.ForcedCaptureFrom;
+            selectedMoves.Clear(); selectedMoves.AddRange(match.Board.LegalMoves(match.HumanSide));
         }
         void DrawCardFace(Rect r, Card card, bool highlighted, float opacity = 1)
         {
@@ -416,6 +437,26 @@ namespace ChessCards
                 { match.Move(promotions[i]); promotions = null; CreditResult(); GUIUtility.ExitGUI(); }
             }
         }
+        void DrawModeChoice(Rect r, GameMode mode, string title, string description)
+        {
+            if (Button(r, "", mode == selectedMode ? Hex("3C4A5C") : panel))
+            { selectedMode = mode; StartMatch(); GUIUtility.ExitGUI(); }
+            Texture2D icon = pieces[0, (int)(mode == GameMode.Chess ? PieceType.King : PieceType.Checker)];
+            if (icon != null) GUI.DrawTexture(new Rect(r.x + 18, r.y + 25, 94, 94), icon, ScaleMode.ScaleToFit);
+            Label(new Rect(r.x + 128, r.y + 14, r.width - 146, 48), title, portrait ? 28 : 25, gold, false, true);
+            Label(new Rect(r.x + 128, r.y + 66, r.width - 146, r.height - 82), description, 20, ink);
+        }
+        void DrawModeSelection()
+        {
+            Rect r = portrait ? new Rect(40, h / 2 - 300, w - 80, 600) : new Rect(200, 100, 880, 520);
+            Overlay(r, "Выбери игру");
+            Rect chess = portrait ? new Rect(r.x + 24, r.y + 100, r.width - 48, 168) : new Rect(r.x + 24, r.y + 110, 404, 235);
+            Rect checkers = portrait ? new Rect(r.x + 24, r.y + 288, r.width - 48, 168) : new Rect(r.x + 452, r.y + 110, 404, 235);
+            DrawModeChoice(chess, GameMode.Chess, "ШАХМАТЫ", "Поставь мат королю.\nКарты управляют перемещениями фигур.");
+            DrawModeChoice(checkers, GameMode.Checkers, "ШАШКИ", "Русские шашки 8×8.\nЗабери или заблокируй все шашки соперника.");
+            Label(new Rect(r.x + 24, r.y + r.height - 134, r.width - 48, 40), "Общие карты, монеты и восстановление двора", 20, muted, true);
+            if (Button(new Rect(r.x + 24, r.y + r.height - 80, r.width - 48, 56), "Назад", Hex("87643B"))) modeSelection = false;
+        }
         void DrawHistory()
         {
             Rect r = new Rect(24, 24, w - 48, h - 48);
@@ -445,6 +486,15 @@ namespace ChessCards
                 "ШАХМАТНЫЕ ОСОБЕННОСТИ\nЕсть рокировка, выбор превращения пешки и взятие на проходе. На проходе можно взять только следующим шахматным перемещением. Карта без перемещения не расходует эту возможность. Короля нельзя брать или оставлять под ударом.\n\n" +
                 "НИЧЬЯ\nПат, два оставшихся короля или 100 перемещений без движения пешек и взятий. Троекратное повторение в этом прототипе не проверяется.\n\n" +
                 "УПРАВЛЕНИЕ\nНажми карту, затем свою фигуру и подсвеченную клетку. Нажми фигуру повторно, чтобы снять выбор. Стрелки перелистывают руку. Правила можно прокручивать. Сохраняются монеты и ремонт; незавершённая партия при закрытии не сохраняется.";
+            if ((!location && match != null ? match.Mode : selectedMode) == GameMode.Checkers)
+                content = "ШАШКИ × КАРТЫ\nРусские шашки на доске 8×8. У каждой стороны по 12 шашек; ходят по тёмным клеткам. Для победы забери все шашки соперника или лиши их допустимых ходов.\n\n" +
+                    "ХОДЫ И ВЗЯТИЯ\nПростая шашка ходит на соседнюю диагональную клетку вперёд, а бьёт в обе стороны. Если есть взятие, нужно бить. При нескольких вариантах можно выбрать любой.\n\n" +
+                    "СЕРИЯ ВЗЯТИЙ\nПродолжай брать одной и той же шашкой, пока возможны взятия. Вся цепочка считается одним перемещением карты. Подсветка автоматически остаётся на этой шашке. Взятые шашки отмечаются крестиком и снимаются после всей цепочки; повторно брать или перепрыгивать их нельзя.\n\n" +
+                    "ДАМКА\nНа последней горизонтали шашка превращается в дамку. Дамка ходит на любое свободное расстояние по диагонали. Если превращение произошло при взятии, цепочка продолжается уже дамкой.\n\n" +
+                    "КАРТЫ\nОдна карта за очередь, совпадение по цвету или значению. Числа 1–3 дают столько перемещений подряд. Если доступных карт нет, возьми одну: подходящую можно сыграть сразу; иначе очередь переходит противнику, даже если на доске было взятие. Рука не пополняется автоматически.\n\n" +
+                    "СПЕЦИАЛЬНЫЕ КАРТЫ\nОбмен меняет владельцев армий и разворачивает доску. Отмена возвращает последнее завершённое перемещение целиком, включая всю цепочку взятий. Пропуск даёт одно перемещение, затем противник пропускает очередь. У каждой специальной карты есть одно своё перемещение после эффекта.\n\n" +
+                    "НИЧЬЯ\nПосле 15 завершённых перемещений дамками каждой стороны без взятия и движения простой шашки. Остальные турнирные ограничения ничьей в прототипе не проверяются.\n\n" +
+                    "НАГРАДА И УПРАВЛЕНИЕ\nЗа победу — 100 монет в общий баланс двора. Нажми карту, шашку и подсвеченную клетку. Во время серии выбирай следующую подсвеченную клетку. История показывает карты и перемещения. Партия при закрытии не сохраняется, монеты и ремонт сохраняются.";
             GUIStyle ruleStyle = new GUIStyle(text) { fontSize = portrait ? 23 : 21, alignment = TextAnchor.UpperLeft };
             float contentHeight = ruleStyle.CalcHeight(new GUIContent(content), view.width - 36) + 20;
             rulesScroll = GUI.BeginScrollView(view, rulesScroll, new Rect(0, 0, view.width - 26, contentHeight));

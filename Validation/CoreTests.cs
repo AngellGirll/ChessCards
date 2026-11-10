@@ -140,6 +140,7 @@ static class CoreTests
             if(match.Phase==MatchPhase.Finished) finished++;
         }
         Console.WriteLine("PASS bot simulation: " + simulated + " actions, " + finished + " finished games, " + recycled + " deck recycles");
+        checks += CheckersTests.Run();
         Console.WriteLine("ALL PASSED — " + checks + " assertions");
     }
 }

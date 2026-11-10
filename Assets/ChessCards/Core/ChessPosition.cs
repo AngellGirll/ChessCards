@@ -4,7 +4,8 @@ using System.Collections.Generic;
 namespace ChessCards
 {
     public enum Side { White, Black }
-    public enum PieceType { None, Pawn, Knight, Bishop, Rook, Queen, King }
+    public enum GameMode { Chess, Checkers }
+    public enum PieceType { None, Pawn, Knight, Bishop, Rook, Queen, King, Checker, CrownedChecker }
 
     public struct Piece
     {
@@ -27,6 +28,11 @@ namespace ChessCards
     public sealed class ChessPosition
     {
         public Piece[] Squares = new Piece[64];
+        public GameMode Mode { get; private set; }
+        public int ForcedCaptureFrom = -1;
+        public ulong PendingCaptured;
+        public int WhiteKingQuietMoves, BlackKingQuietMoves;
+        public ChessPosition(GameMode mode = GameMode.Chess) { Mode = mode; }
         // white short/long, black short/long.
         public int CastleRights = 15;
         public int EnPassantSquare = -1;
@@ -40,8 +46,9 @@ namespace ChessCards
 
         public static Side Other(Side side) { return side == Side.White ? Side.Black : Side.White; }
         public static string SquareName(int index) { return "" + (char)('a' + index % 8) + (index / 8 + 1); }
-        public static ChessPosition Initial()
+        public static ChessPosition Initial(GameMode mode = GameMode.Chess)
         {
+            if (mode == GameMode.Checkers) return CheckersRules.Initial();
             var p = new ChessPosition();
             PieceType[] row = { PieceType.Rook, PieceType.Knight, PieceType.Bishop, PieceType.Queen, PieceType.King, PieceType.Bishop, PieceType.Knight, PieceType.Rook };
             for (int x = 0; x < 8; x++)
@@ -55,11 +62,14 @@ namespace ChessCards
         }
         public ChessPosition Clone()
         {
-            return new ChessPosition { Squares = (Piece[])Squares.Clone(), CastleRights = CastleRights,
+            return new ChessPosition(Mode) { Squares = (Piece[])Squares.Clone(), CastleRights = CastleRights,
+                ForcedCaptureFrom = ForcedCaptureFrom, PendingCaptured = PendingCaptured,
+                WhiteKingQuietMoves = WhiteKingQuietMoves, BlackKingQuietMoves = BlackKingQuietMoves,
                 EnPassantSquare = EnPassantSquare, EnPassantCapturer = EnPassantCapturer, QuietMoves = QuietMoves };
         }
         public bool InCheck(Side side)
         {
+            if (Mode == GameMode.Checkers) return false;
             for (int i = 0; i < 64; i++)
                 if (Squares[i].Type == PieceType.King && Squares[i].Side == side)
                     return Attacked(i, Other(side));
@@ -91,6 +101,7 @@ namespace ChessCards
         static bool Inside(int x, int y) { return x >= 0 && x < 8 && y >= 0 && y < 8; }
         public List<ChessMove> LegalMoves(Side side)
         {
+            if (Mode == GameMode.Checkers) return CheckersRules.LegalMoves(this, side);
             var moves = new List<ChessMove>();
             for (int i = 0; i < 64; i++)
             {
@@ -177,6 +188,7 @@ namespace ChessCards
         // Call only with a move returned by LegalMoves. Search and tests also use this method.
         public void ApplyUnchecked(ChessMove m)
         {
+            if (Mode == GameMode.Checkers) { CheckersRules.ApplyStep(this, m); return; }
             Piece p = Squares[m.From], captured = Squares[m.To];
             if (p.Type == PieceType.Pawn && m.To == EnPassantSquare && p.Side == EnPassantCapturer && captured.Type == PieceType.None)
             { Squares[m.To + (p.Side == Side.White ? -8 : 8)] = new Piece(); captured = new Piece(PieceType.Pawn, Other(p.Side)); }
@@ -203,6 +215,7 @@ namespace ChessCards
         }
         public bool BareKings()
         {
+            if (Mode == GameMode.Checkers) return false;
             foreach (var p in Squares) if (p.Type != PieceType.None && p.Type != PieceType.King) return false;
             return true;
         }

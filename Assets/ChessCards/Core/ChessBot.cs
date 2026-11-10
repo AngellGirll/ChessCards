@@ -7,7 +7,7 @@ namespace ChessCards
     public sealed class ChessBot
     {
         readonly Random random;
-        static readonly int[] Values = { 0, 100, 320, 330, 500, 900, 20000 };
+        static readonly int[] Values = { 0, 100, 320, 330, 500, 900, 20000, 100, 320 };
         public ChessBot(int seed) { random = new Random(seed); }
         public int ChooseCard(CardMatch match)
         {
@@ -38,8 +38,8 @@ namespace ChessCards
                 Side enemy = ChessPosition.Other(side);
                 bool check = next.InCheck(enemy);
                 var enemyMoves = next.LegalMoves(enemy);
-                if (check && enemyMoves.Count == 0) return move;
-                Side following = (match.Remaining > 1 && !check || match.SkipPending && !check) ? side : enemy;
+                if (check && enemyMoves.Count == 0 || next.Mode == GameMode.Checkers && next.ForcedCaptureFrom < 0 && enemyMoves.Count == 0) return move;
+                Side following = (next.ForcedCaptureFrom >= 0 || match.Remaining > 1 && !check || match.SkipPending && !check) ? side : enemy;
                 List<ChessMove> continuations = following == enemy ? enemyMoves : next.LegalMoves(side);
                 double score = Evaluate(next, side);
                 if (continuations.Count > 0)
@@ -64,9 +64,9 @@ namespace ChessCards
             int result = 0;
             for (int i = 0; i < 64; i++)
             {
-                Piece p = board.Squares[i]; if (p.Type == PieceType.None) continue;
+                Piece p = board.Squares[i]; if (p.Type == PieceType.None || CheckersRules.Pending(board, i)) continue;
                 int x = i % 8, y = p.Side == Side.White ? i / 8 : 7 - i / 8;
-                int bonus = p.Type == PieceType.Pawn ? y * 7 : p.Type == PieceType.King ? 0 : 3 * (7 - Math.Abs(2 * x - 7) / 2 - Math.Abs(2 * y - 7) / 2);
+                int bonus = p.Type == PieceType.Pawn || p.Type == PieceType.Checker ? y * 7 : p.Type == PieceType.King ? 0 : 3 * (7 - Math.Abs(2 * x - 7) / 2 - Math.Abs(2 * y - 7) / 2);
                 result += (p.Side == perspective ? 1 : -1) * (Values[(int)p.Type] + bonus);
             }
             return result;
