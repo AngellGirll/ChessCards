@@ -79,7 +79,7 @@ namespace ChessCards
         {
             if (location || match == null) return;
             CreditResult();
-            if (match.Phase == MatchPhase.Finished || match.Actor != 1)
+            if (match.Phase == MatchPhase.Finished || match.Phase == MatchPhase.GoScoring || match.Actor != 1)
             { botTurn = -1; pendingBotCard = -1; return; }
             float now = Time.unscaledTime;
             if (rules || historyOpen || confirmLeave || promotions != null)
@@ -101,6 +101,12 @@ namespace ChessCards
             {
                 if (pendingBotCard < 0)
                 {
+                    if (match.Go != null && match.Go.AcceptPass(match.ActiveSide))
+                    {
+                        match.PassGo();
+                        cardAnnouncementUntil = 0;
+                        return;
+                    }
                     int card = bot.ChooseCard(match);
                     if (card >= 0)
                     {
@@ -257,7 +263,7 @@ namespace ChessCards
             if (Button(new Rect(w - 160, 22, 132, 52), "Правила", panel, true, 20)) rules = true;
             Fill(new Rect(28, 90, w - 56, portrait ? 100 : 62), panel);
             string side = match.HumanSide == Side.White ? "белые" : "чёрные";
-            string phase = match.Phase == MatchPhase.Finished ? match.Result : (match.Actor == 0 ? "Твоя очередь" : "Ход бота") + "  •  " + (match.Phase == MatchPhase.ChooseCard ? "выбор карты" : match.Board != null && match.Board.ForcedCaptureFrom >= 0 ? "продолжи взятие" : "перемещений: " + match.Remaining);
+            string phase = match.Phase == MatchPhase.GoScoring ? "Подсчёт очков" : match.Phase == MatchPhase.Finished ? match.Result : (match.Actor == 0 ? "Твоя очередь" : "Ход бота") + "  •  " + (match.Phase == MatchPhase.ChooseCard ? "выбор карты" : match.Board != null && match.Board.ForcedCaptureFrom >= 0 ? "продолжи взятие" : "перемещений: " + match.Remaining);
             Label(new Rect(42, 94, w - 84, portrait ? 48 : 30), phase, portrait ? 23 : 24, match.Actor == 0 ? gold : ink, false, true);
             string playerInfo = match.Domino == null ? "Ты: " + side : "Костяшек у бота: " + match.Domino.Rack(match.SideFor(1)).Count;
             Label(new Rect(42, portrait ? 140 : 124, w - 84, 34), playerInfo + "  •  Очередь №" + match.Turn + "  •  Карт у бота: " + match.Hands[1].Count, portrait ? 20 : 18, muted);
@@ -267,6 +273,11 @@ namespace ChessCards
             else if (match.Domino != null) DrawDominoBoard(board);
             else DrawBoard(board);
             float right = portrait ? 32 : 590, top = portrait ? 802 : 180, width = portrait ? 656 : 650;
+            if (match.Phase == MatchPhase.GoScoring)
+            {
+                DrawGoScoring(right, top, width);
+                return;
+            }
             DrawCards(right, top, width);
             float messageY = portrait ? 1126 : 508;
             float messageHeight = match.Phase == MatchPhase.Finished && portrait ? 30 : portrait ? 64 : 70;
@@ -303,6 +314,30 @@ namespace ChessCards
                 Label(new Rect(right, 584, width, 56), lines, 17, muted);
             }
         }
+        void DrawGoScoring(float x, float y, float width)
+        {
+            Fill(new Rect(x, y, width, 232), panel);
+            Label(new Rect(x + 18, y + 16, width - 36, 54), match.GoScoreText, 30, gold, true, true);
+            Label(new Rect(x + 24, y + 75, width - 48, 40), "У белых уже учтены 7,5 очка коми.", 20, muted, true);
+            Label(new Rect(x + 24, y + 122, width - 48, 84),
+                "Нажми на камень в мёртвой группе, чтобы исключить всю группу из подсчёта. Повторное нажатие возвращает группу.", 23, ink);
+
+            float buttonY = portrait ? 1200 : 650;
+            float buttonWidth = (width - 16) / 2;
+            if (Button(new Rect(x, buttonY, buttonWidth, 54), "Продолжить игру", panel))
+            {
+                match.ResumeGo();
+                cardAnnouncementUntil = 0;
+                GUIUtility.ExitGUI();
+            }
+            if (Button(new Rect(x + buttonWidth + 16, buttonY, buttonWidth, 54), "Подтвердить счёт", Hex("87643B")))
+            {
+                match.ConfirmGoScore();
+                CreditResult();
+                GUIUtility.ExitGUI();
+            }
+        }
+
         void DrawGoBoard(Rect r)
         {
             int size = GoPosition.Size;
@@ -326,9 +361,20 @@ namespace ChessCards
                 if (stone.HasValue)
                 {
                     var icon = pieces[(int)stone.Value, (int)PieceType.Checker];
+                    bool marked = match.IsGoStoneMarked(point);
+                    Color oldColor = GUI.color;
+                    if (marked) GUI.color = new Color(1, 1, 1, .38f);
                     if (icon != null) GUI.DrawTexture(target, icon, ScaleMode.ScaleToFit);
                     else Label(target, stone == Side.White ? "○" : "●", 28, grid, true);
-                    if (match.Go.LastPoint == point) Fill(new Rect(target.x + cell / 2 - 3, target.y + cell / 2 - 3, 6, 6), gold);
+                    GUI.color = oldColor;
+                    if (marked) Label(target, "×", 30, Hex("72352B"), true, true);
+                    else if (match.Go.LastPoint == point)
+                        Fill(new Rect(target.x + cell / 2 - 3, target.y + cell / 2 - 3, 6, 6), gold);
+                    if (match.Phase == MatchPhase.GoScoring && GUI.Button(target, GUIContent.none, GUIStyle.none))
+                    {
+                        match.ToggleGoDeadGroup(point);
+                        GUIUtility.ExitGUI();
+                    }
                 }
                 else if ((row == 2 || row == 6) && (col == 2 || col == 6) || row == 4 && col == 4)
                     Fill(new Rect(target.x + cell / 2 - 3, target.y + cell / 2 - 3, 6, 6), grid);
@@ -660,7 +706,7 @@ namespace ChessCards
             if (mode == GameMode.Go)
                 content = "ГО 9×9\nТы начинаешь чёрными. Нажимай на свободные пересечения линий. Камни соединяются по горизонтали и вертикали. Когда у группы противника не остаётся соседних свободных точек, её камни снимаются. Нельзя оставлять свою группу без свободных точек или повторять уже сыгранную позицию.\n\n" +
                     "КАРТЫ\nКарта даёт 1–3 постановки камней. Обмен меняет цвета, отмена возвращает позицию до последней постановки, а пропуск даёт один ход и оставляет очередь у сыгравшего карту. Правила подбора карт по цвету и значению общие.\n\n" +
-                    "ПАС И ПОДСЧЁТ\nПас завершает очередь, в том числе до выбора карты. После пасов обеих сторон подряд считаются камни на доске и окружённые свободные точки. Белым добавляется 7,5 очка. Спорные группы нужно снять ходами до паса. Победа даёт 100 монет.";
+                    "ПАС И ПОДСЧЁТ\nПас завершает очередь, в том числе до выбора карты. После двух пасов открывается подсчёт. Нажми на камни в мёртвых группах и подтверди результат. Если статус группы неясен, продолжи партию. Очки дают камни на доске и окружённые свободные точки. Белым добавляется 7,5 очка. Победа даёт 100 монет.";
             else if (mode == GameMode.Domino)
                 content = "ДОМИНО С ДОБОРОМ\nНабор 0–6. На старте по 7 костяшек. Первый ход твой, выложи любую. Дальше выбери костяшку и нажми кнопку края цепочки с таким же числом точек.\n\n" +
                     "КАРТЫ И БАЗАР\nКарта даёт 1–3 выкладывания. Обмен меняет руки костяшек, отмена возвращает позицию до последнего выкладывания, пропуск даёт один ход и оставляет очередь у сыгравшего карту. Если подходящей костяшки нет, после розыгрыша карты бери из базара до подходящей. Добор костяшки не тратит ход карты. При пустом базаре пас передаёт очередь.\n\n" +

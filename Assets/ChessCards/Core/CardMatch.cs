@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace ChessCards
 {
     public enum CardKind { Number, Swap, Undo, Skip }
-    public enum MatchPhase { ChooseCard, MovePieces, Finished }
+    public enum MatchPhase { ChooseCard, MovePieces, Finished, GoScoring }
     public struct Card
     {
         public int Color, Number;
@@ -43,6 +43,8 @@ namespace ChessCards
         readonly List<Card> discard = new List<Card>();
         readonly Stack<MoveSnapshot> history = new Stack<MoveSnapshot>();
         readonly Random random;
+        bool[] deadGoStones;
+        int goBlackArea, goWhiteArea;
         public Side HumanSide { get; private set; }
         public int Actor { get; private set; }
         public MatchPhase Phase { get; private set; }
@@ -134,6 +136,7 @@ namespace ChessCards
             {
                 var previous = history.Pop();
                 Board = previous.Board; Go = previous.Go; Domino = previous.Domino;
+                Go?.ClearPass();
                 LastMove = null;
                 effect += "Последний ход отменён. ";
             }
@@ -220,20 +223,63 @@ namespace ChessCards
 
         public bool PassGo()
         {
-            if (Go == null || Phase == MatchPhase.Finished) return false;
-            Side side = ActiveSide;
+            if (Go == null || (Phase != MatchPhase.ChooseCard && Phase != MatchPhase.MovePieces)) return false;
             SetMessage(ActorName + "пас.");
-            if (Go.Pass(side))
+            SkipPending = false;
+            if (Go.Pass(ActiveSide))
             {
-                int black = Go.Area(Side.Black), white = Go.Area(Side.White);
-                string score = "Чёрные " + black + ", белые " + (white + GoPosition.Komi).ToString("0.0", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
-                Finish(OwnerOf(black > white + GoPosition.Komi ? Side.Black : Side.White), score);
+                Remaining = 0;
+                Phase = MatchPhase.GoScoring;
+                deadGoStones = new bool[GoPosition.PointCount];
+                UpdateGoScore();
+                SetMessage("Два паса подряд. Начался подсчёт очков.");
             }
-            else
+            else EndTurn();
+            return true;
+        }
+
+        public bool IsGoStoneMarked(int point)
+        {
+            return deadGoStones != null && deadGoStones[point];
+        }
+
+        public bool ToggleGoDeadGroup(int point)
+        {
+            if (Phase != MatchPhase.GoScoring || !Go.ToggleDeadGroup(point, deadGoStones)) return false;
+            UpdateGoScore();
+            return true;
+        }
+
+        void UpdateGoScore()
+        {
+            Go.CountAreas(out goBlackArea, out goWhiteArea, deadGoStones);
+        }
+
+        public string GoScoreText
+        {
+            get
             {
-                SkipPending = false;
-                EndTurn();
+                string white = (goWhiteArea + GoPosition.Komi).ToString("0.0",
+                    System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+                return "Чёрные " + goBlackArea + "  ·  Белые " + white;
             }
+        }
+
+        public bool ConfirmGoScore()
+        {
+            if (Phase != MatchPhase.GoScoring) return false;
+            Side winner = goBlackArea > goWhiteArea + GoPosition.Komi ? Side.Black : Side.White;
+            Finish(OwnerOf(winner), GoScoreText);
+            return true;
+        }
+
+        public bool ResumeGo()
+        {
+            if (Phase != MatchPhase.GoScoring) return false;
+            deadGoStones = null;
+            Go.ClearPass();
+            SetMessage("Партия продолжена.");
+            EndTurn();
             return true;
         }
 

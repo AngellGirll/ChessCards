@@ -48,9 +48,45 @@ static class AdditionalGamesTests
         Check(match.Actor == 1 && match.Go.Occupied == 3, "Third placement hands over");
         GiveCard(match, new Card(match.Top.Color, CardKind.Undo));
         Check(match.Go.Occupied == 2 && match.Go.StoneAt(2) == null && match.Remaining == 1, "Undo restores Go board");
-        Check(match.PassGo() && match.PassGo() && match.Phase == MatchPhase.Finished && match.Winner == 0, "Two passes score an occupied board");
+        Check(match.PassGo() && match.PassGo() && match.Phase == MatchPhase.GoScoring, "Two passes open scoring");
+        Check(match.ConfirmGoScore() && match.Winner == 0, "Black wins occupied Go board");
         match = new CardMatch(9, mode: GameMode.Go);
-        Check(match.PassGo() && match.PassGo() && match.Winner == 1, "White wins empty Go board by komi");
+        Check(match.PassGo() && match.PassGo() && match.ConfirmGoScore() && match.Winner == 1, "White wins empty Go board by komi");
+    }
+
+    static void GoScoring()
+    {
+        var match = new CardMatch(4, mode: GameMode.Go);
+        for (int y = 1; y <= 4; y++)
+        for (int x = 1; x <= 4; x++)
+            if (x == 1 || x == 4 || y == 1 || y == 4)
+                Check(match.Go.Place(Side.Black, Point(x, y), out _), "Scoring fixture black border");
+        int first = Point(2, 2), second = Point(2, 3), live = Point(8, 8);
+        foreach (int point in new[] { first, second, live })
+            Check(match.Go.Place(Side.White, point, out _), "Scoring fixture white group");
+        Check(!match.ToggleGoDeadGroup(first) && !match.ConfirmGoScore(), "Scoring actions unavailable in play");
+        Check(match.PassGo() && match.Go.AcceptPass(match.ActiveSide) == false && match.PassGo(), "Pass with unsettled groups");
+        Check(match.GoScoreText == "Чёрные 12  ·  Белые 10,5", "Score before marking the group");
+        Check(!match.PassGo() && !match.PlaceStone(0) && !match.ToggleGoDeadGroup(0), "Scoring guards");
+        Check(match.ToggleGoDeadGroup(first) && match.IsGoStoneMarked(first) &&
+            match.IsGoStoneMarked(second) && !match.IsGoStoneMarked(live), "Click marks only the connected group");
+        Check(match.GoScoreText == "Чёрные 16  ·  Белые 8,5", "Dead group excluded and territory recomputed");
+        Check(match.ToggleGoDeadGroup(second) && !match.IsGoStoneMarked(first) &&
+            match.GoScoreText == "Чёрные 12  ·  Белые 10,5", "Click again restores the group and score");
+        Check(match.ToggleGoDeadGroup(first) && match.ResumeGo() && match.Actor == 0 &&
+            match.Phase == MatchPhase.ChooseCard && match.Go.LastPass == null, "Resume with the opponent of the last passer");
+        Check(match.Go.StoneAt(first) == Side.White && !match.IsGoStoneMarked(first), "Resume preserves stones and clears marks");
+        Check(match.PassGo() && match.Phase == MatchPhase.ChooseCard && match.PassGo(), "Resume resets the pass sequence");
+        Check(match.ToggleGoDeadGroup(first) && match.ConfirmGoScore() && match.Phase == MatchPhase.Finished &&
+            match.Winner == 0 && match.Result.Contains("Белые 8,5") && !match.ConfirmGoScore(), "Confirmed score determines the winner once");
+
+        match = new CardMatch(5, mode: GameMode.Go);
+        Check(match.PassGo(), "Pass before a placement");
+        GiveCard(match, new Card(match.Top.Color, 1));
+        Check(match.PlaceStone(0), "Placement interrupts the pass streak");
+        GiveCard(match, new Card(match.Top.Color, CardKind.Undo));
+        Check(match.Go.LastPass == null && match.PassGo() && match.Phase == MatchPhase.ChooseCard,
+            "Undo of a placement does not restore an old pass");
     }
 
     static void DominoRules()
@@ -79,7 +115,9 @@ static class AdditionalGamesTests
             var bot = new ChessBot(seed + 400);
             for (int actions = 0; actions < 900 && match.Phase != MatchPhase.Finished; actions++)
             {
-                if (match.Phase == MatchPhase.ChooseCard)
+                if (match.Phase == MatchPhase.GoScoring)
+                    Check(match.ConfirmGoScore(), "Bot match confirms Go score");
+                else if (match.Phase == MatchPhase.ChooseCard)
                 {
                     int card = bot.ChooseCard(match);
                     Check(card < 0 ? match.Draw() : match.PlayCard(card), mode + " bot card step");
@@ -125,6 +163,7 @@ static class AdditionalGamesTests
     public static int Run()
     {
         GoRules();
+        GoScoring();
         DominoRules();
         CompleteMatches();
         Console.WriteLine("PASS Go capture, suicide, ko, scoring and undo; domino draw, undo, swap and scoring; 16 completed new-mode bot matches");

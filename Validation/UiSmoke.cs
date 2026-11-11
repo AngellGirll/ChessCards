@@ -268,6 +268,21 @@ static class UiSmoke
         UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
         UnityEngine.GUI.Click(370,1220);Draw(app,"Validation/Previews/transition.svg");
         Check(match.Actor==1 && match.Go.LastPass==Side.Black,"Go pass button hands over");
+        for (int point=0;point<12;point++) Check(match.Go.Place(Side.White,point,out _),"Go bot pass fixture");
+        match.Go.Pass(Side.Black);
+        int botCards = match.Hands[1].Count, discarded = match.DiscardCount;
+        Call(app,"Update");
+        UnityEngine.Time.unscaledTime+=10;Call(app,"Update");
+        Check(match.Phase==MatchPhase.GoScoring && match.Hands[1].Count==botCards && match.DiscardCount==discarded,
+            "Bot answers a pass directly without playing a card");
+        UnityEngine.GUI.Click(360,490);Draw(app,"Validation/Previews/transition.svg");
+        Check(match.IsGoStoneMarked(40),"Go scoring group click");
+        Draw(app,"Validation/Previews/go-scoring-portrait.svg");
+        UnityEngine.GUI.Click(190,1220);Draw(app,"Validation/Previews/transition.svg");
+        Check(match.Phase==MatchPhase.ChooseCard && match.Actor==0 && !match.IsGoStoneMarked(40),"Go resume click");
+        Check(match.PassGo() && match.PassGo(),"Go score confirmation fixture");
+        UnityEngine.GUI.Click(530,1220);Draw(app,"Validation/Previews/transition.svg");
+        Check(match.Phase==MatchPhase.Finished,"Go score confirmation click");
         Set(app,"location",true);
         UnityEngine.GUI.Click(150,1160);Draw(app,"Validation/Previews/transition.svg");
         UnityEngine.GUI.Click(500,700);Draw(app,"Validation/Previews/transition.svg");

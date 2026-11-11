@@ -61,16 +61,42 @@ namespace ChessCards
             return finished;
         }
 
+        internal void ClearPass() { LastPass = null; }
+
+        internal bool ToggleDeadGroup(int point, bool[] dead)
+        {
+            if (point < 0 || point >= PointCount || stones[point] == 0) return false;
+            var group = new List<int>();
+            GroupLiberties(stones, point, group);
+            bool mark = !dead[point];
+            foreach (int member in group) dead[member] = mark;
+            return true;
+        }
+
         public int Area(Side side)
         {
-            byte color = Color(side);
-            int result = 0;
+            CountAreas(out int black, out int white);
+            return side == Side.Black ? black : white;
+        }
+
+        internal void CountAreas(out int black, out int white, bool[] dead = null)
+        {
+            byte[] board = stones;
+            if (dead != null)
+            {
+                board = (byte[])stones.Clone();
+                for (int point = 0; point < PointCount; point++)
+                    if (dead[point]) board[point] = 0;
+            }
+            black = white = 0;
+            byte blackStone = Color(Side.Black), whiteStone = Color(Side.White);
             bool[] visited = new bool[PointCount];
             var region = new List<int>(PointCount);
             for (int point = 0; point < PointCount; point++)
             {
-                if (stones[point] == color) result++;
-                if (stones[point] != 0 || visited[point]) continue;
+                if (board[point] == blackStone) black++;
+                if (board[point] == whiteStone) white++;
+                if (board[point] != 0 || visited[point]) continue;
                 region.Clear();
                 region.Add(point);
                 visited[point] = true;
@@ -79,7 +105,7 @@ namespace ChessCards
                 {
                     foreach (int neighbor in Neighbors[region[i]])
                     {
-                        byte stone = stones[neighbor];
+                        byte stone = board[neighbor];
                         if (stone != 0) borders |= 1 << stone;
                         else if (!visited[neighbor])
                         {
@@ -88,9 +114,9 @@ namespace ChessCards
                         }
                     }
                 }
-                if (borders == (1 << color)) result += region.Count;
+                if (borders == (1 << blackStone)) black += region.Count;
+                else if (borders == (1 << whiteStone)) white += region.Count;
             }
-            return result;
         }
 
         public int StoneBalance(Side side)
@@ -104,14 +130,16 @@ namespace ChessCards
             return balance;
         }
 
+        internal bool AcceptPass(Side side)
+        {
+            if (LastPass != ChessPosition.Other(side) || Occupied < 12) return false;
+            CountAreas(out int black, out int white);
+            return side == Side.Black ? black > white + Komi : white + Komi > black;
+        }
+
         internal int ChoosePoint(Side side, Random random)
         {
-            if (LastPass == ChessPosition.Other(side) && Occupied >= 12)
-            {
-                double difference = Area(Side.Black) - Area(Side.White) - Komi;
-                if (side == Side.Black ? difference > 0 : difference < 0) return -1;
-            }
-
+            if (AcceptPass(side)) return -1;
             int best = -1;
             double bestScore = double.NegativeInfinity;
             byte color = Color(side);
