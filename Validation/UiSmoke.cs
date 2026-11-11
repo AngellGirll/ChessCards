@@ -209,7 +209,7 @@ static class UiSmoke
         UnityEngine.GUI.Click(300,880);Draw(app,"Validation/Previews/transition.svg");
         Check(!(bool)Get(app,"modeSelection") && (bool)Get(app,"location"),"Mode cancel should stay in courtyard");
         UnityEngine.GUI.Click(150,1160);Draw(app,"Validation/Previews/transition.svg");
-        UnityEngine.GUI.Click(300,700);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(500,520);Draw(app,"Validation/Previews/transition.svg");
         var match=(CardMatch)Get(app,"match");
         Check(match.Mode==GameMode.Checkers && !(bool)Get(app,"location"),"Checkers choice did not start checkers");
         var pieces=(UnityEngine.Texture2D[,])Get(app,"pieces");
@@ -250,6 +250,40 @@ static class UiSmoke
         UnityEngine.Screen.width=1280;UnityEngine.Screen.height=720;
         Console.WriteLine("PASS game mode selector, cancel, checkers input, capture continuation, rules and same-mode replay");
     }
+    static void GoDominoModeSmoke()
+    {
+        UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
+        var app=new ChessCardsApp();Call(app,"Awake");
+        UnityEngine.GUI.Click(150,1160);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(300,700);Draw(app,"Validation/Previews/transition.svg");
+        var match=(CardMatch)Get(app,"match");
+        Check(match.Mode==GameMode.Go && match.HumanSide==Side.Black,"Go selector starts the human as Black");
+        match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,2));
+        UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(360,490);Draw(app,"Validation/Previews/transition.svg");
+        Check(match.Go.StoneAt(40)==Side.Black && match.Remaining==1,"Go center intersection click");
+        Draw(app,"Validation/Previews/go-portrait.svg");
+        UnityEngine.Screen.width=1280;UnityEngine.Screen.height=720;
+        Draw(app,"Validation/Previews/go-landscape.svg");
+        UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
+        UnityEngine.GUI.Click(370,1220);Draw(app,"Validation/Previews/transition.svg");
+        Check(match.Actor==1 && match.Go.LastPass==Side.Black,"Go pass button hands over");
+        Set(app,"location",true);
+        UnityEngine.GUI.Click(150,1160);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(500,700);Draw(app,"Validation/Previews/transition.svg");
+        match=(CardMatch)Get(app,"match");
+        Check(match.Mode==GameMode.Domino,"Domino choice starts a domino match");
+        match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));
+        UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(131,586);Draw(app,"Validation/Previews/transition.svg");
+        Check((int)Get(app,"selected")==0,"Domino rack click selects first tile");
+        UnityEngine.GUI.Click(220,460);Draw(app,"Validation/Previews/transition.svg");
+        Check(match.Domino.Chain.Count==1 && match.Domino.Rack(match.HumanSide).Count==6,"Domino end button places selected tile");
+        Draw(app,"Validation/Previews/domino-portrait.svg");
+        UnityEngine.Screen.width=1280;UnityEngine.Screen.height=720;
+        Draw(app,"Validation/Previews/domino-landscape.svg");
+        Console.WriteLine("PASS Go and domino selection, Go intersection and pass, domino rack and chain controls");
+    }
     static void Main()
     {
         Directory.CreateDirectory("Validation/Previews");
@@ -266,15 +300,8 @@ static class UiSmoke
         UnityEngine.GUI.Click(300,520);Draw(app,"Validation/Previews/transition.svg");
         Check(!(bool)Get(app,"location") && ((CardMatch)Get(app,"match")).Mode==GameMode.Chess,"Chess choice failed");
         var match=(CardMatch)Get(app,"match");
-        var playable=match.PlayableCards();
-        while(playable.Count==0)
-        {
-            UnityEngine.GUI.Click(150,1220);Draw(app,"Validation/Previews/transition.svg");
-            for(int i=0;i<20&&match.Actor==1;i++){UnityEngine.Time.unscaledTime+=1;Call(app,"Update");}
-            playable=match.PlayableCards();
-        }
-        int card=playable[0];Set(app,"page",card/4);
-        UnityEngine.GUI.Click(32+(card%4)*167+70,1010);Draw(app,"Validation/Previews/transition.svg");
+        match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));
+        UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
         Check(match.Phase==MatchPhase.MovePieces,"Card click failed");
         var move=match.Board.LegalMoves(match.HumanSide)[0];
         bool white=match.HumanSide==Side.White;
@@ -299,6 +326,7 @@ static class UiSmoke
         var reloaded=new ChessCardsApp();Call(reloaded,"Awake");var saved=(RestorationProgress)Get(reloaded,"progress");
         Check(saved.Coins==40&&saved.Bench&&saved.Wins==1,"Progress save/reload failed");
         CheckersModeSmoke();
+        GoDominoModeSmoke();
         Console.WriteLine("PASS runtime source compilation against isolated adapter; GUI clicks, card selection, board input, mate reward, repair and save/reload");
         Console.WriteLine("Layout previews emitted. This does not replace testing in Unity Editor or a device build.");
     }

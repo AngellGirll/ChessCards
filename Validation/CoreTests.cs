@@ -141,6 +141,7 @@ static class CoreTests
         }
         Console.WriteLine("PASS bot simulation: " + simulated + " actions, " + finished + " finished games, " + recycled + " deck recycles");
         checks += CheckersTests.Run();
+        checks += AdditionalGamesTests.Run();
         Console.WriteLine("ALL PASSED — " + checks + " assertions");
     }
 }

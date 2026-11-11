@@ -22,11 +22,26 @@ namespace ChessCards
     public sealed class CardMatch
     {
         public ChessPosition Board { get; private set; }
-        public GameMode Mode { get { return Board.Mode; } }
+        public GoPosition Go { get; private set; }
+        public DominoPosition Domino { get; private set; }
+        public GameMode Mode { get; }
+        sealed class MoveSnapshot
+        {
+            public readonly ChessPosition Board;
+            public readonly GoPosition Go;
+            public readonly DominoPosition Domino;
+
+            public MoveSnapshot(CardMatch match)
+            {
+                Board = match.Board?.Clone();
+                Go = match.Go?.Clone();
+                Domino = match.Domino?.Clone();
+            }
+        }
         public readonly List<Card>[] Hands = { new List<Card>(), new List<Card>() };
         readonly List<Card> deck = new List<Card>();
         readonly List<Card> discard = new List<Card>();
-        readonly Stack<ChessPosition> history = new Stack<ChessPosition>();
+        readonly Stack<MoveSnapshot> history = new Stack<MoveSnapshot>();
         readonly Random random;
         public Side HumanSide { get; private set; }
         public int Actor { get; private set; }
@@ -50,8 +65,13 @@ namespace ChessCards
 
         public CardMatch(int seed, ChessPosition position = null, GameMode mode = GameMode.Chess)
         {
-            random = new Random(seed); Board = position == null ? ChessPosition.Initial(mode) : position.Clone();
-            HumanSide = Side.White; Actor = 0; Winner = -1; Turn = 1;
+            random = new Random(seed);
+            Mode = position == null ? mode : position.Mode;
+            if (Mode == GameMode.Go) Go = new GoPosition();
+            else if (Mode == GameMode.Domino) Domino = new DominoPosition(random);
+            else Board = position == null ? ChessPosition.Initial(mode) : position.Clone();
+            HumanSide = Mode == GameMode.Go ? Side.Black : Side.White;
+            Actor = 0; Winner = -1; Turn = 1;
             for (int color = 0; color < 4; color++)
             {
                 for (int n = 1; n <= 3; n++) for (int copy = 0; copy < 4; copy++) deck.Add(new Card(color, n));
@@ -79,14 +99,17 @@ namespace ChessCards
             if (index < 0 || index >= Hands[Actor].Count) return "Нет такой карты.";
             Card card = Hands[Actor][index];
             if (!card.Matches(Top)) return "Нужен тот же цвет или то же значение.";
-            if (card.Kind == CardKind.Swap && (Board.InCheck(Side.White) || Board.InCheck(Side.Black)))
+            if (card.Kind == CardKind.Swap && (InCheck(Side.White) || InCheck(Side.Black)))
                 return "Обмен недоступен, пока король под шахом.";
             if (card.Kind == CardKind.Undo)
             {
                 if (history.Count == 0) return "Пока нечего отменять.";
-                ChessPosition previous = history.Peek();
-                if (previous.InCheck(ChessPosition.Other(ActiveSide))) return "Нельзя отменить защиту от шаха и ходить снова.";
-                if (previous.LegalMoves(ActiveSide).Count == 0) return "После отмены нет легального перемещения.";
+                ChessPosition previous = history.Peek().Board;
+                if (previous != null)
+                {
+                    if (previous.InCheck(ChessPosition.Other(ActiveSide))) return "Нельзя отменить защиту от шаха и ходить снова.";
+                    if (previous.LegalMoves(ActiveSide).Count == 0) return "После отмены нет легального перемещения.";
+                }
             }
             return "";
         }
@@ -108,7 +131,12 @@ namespace ChessCards
             if (card.Kind == CardKind.Swap)
             { HumanSide = ChessPosition.Other(HumanSide); effect += "Стороны поменялись. "; }
             if (card.Kind == CardKind.Undo)
-            { Board = history.Pop(); LastMove = null; effect += "Последнее перемещение отменено. "; }
+            {
+                var previous = history.Pop();
+                Board = previous.Board; Go = previous.Go; Domino = previous.Domino;
+                LastMove = null;
+                effect += "Последний ход отменён. ";
+            }
             Phase = MatchPhase.MovePieces;
             SetMessage(effect + "Перемещений: " + Remaining + ".");
             CheckStart();
@@ -127,7 +155,7 @@ namespace ChessCards
                 Hands[Actor].Add(Pop()); int index = Hands[Actor].Count - 1;
                 if (CanPlay(index)) { SetMessage("Добрана подходящая карта — разыграй её."); return true; }
             }
-            if (Board.InCheck(ActiveSide))
+            if (InCheck(ActiveSide))
             {
                 Phase = MatchPhase.MovePieces; Remaining = 1;
                 SetMessage("Подходящей карты нет, но король под шахом: одно защитное перемещение.");
@@ -137,14 +165,14 @@ namespace ChessCards
         }
         public bool Move(ChessMove wanted)
         {
-            if (Phase != MatchPhase.MovePieces || Remaining <= 0) return false;
+            if (Board == null || Phase != MatchPhase.MovePieces || Remaining <= 0) return false;
             bool found = false;
             foreach (var m in Board.LegalMoves(ActiveSide))
                 if (m.From == wanted.From && m.To == wanted.To && m.Promotion == wanted.Promotion) { found = true; break; }
             if (!found) return false;
             Side mover = ActiveSide;
             // All jumps of one checkers capture belong to a single reversible move.
-            if (Board.ForcedCaptureFrom < 0) history.Push(Board.Clone());
+            if (Board.ForcedCaptureFrom < 0) history.Push(new MoveSnapshot(this));
             Board.ApplyUnchecked(wanted); LastMove = wanted;
             if (Mode == GameMode.Checkers && Board.ForcedCaptureFrom >= 0)
             {
@@ -174,9 +202,91 @@ namespace ChessCards
             else Message = moveText + " Осталось перемещений: " + Remaining + ".";
             return true;
         }
+        bool InCheck(Side side) { return Board != null && Board.InCheck(side); }
+        string ActorName { get { return Actor == 0 ? "Ты: " : "Бот: "; } }
+
+        public bool PlaceStone(int point)
+        {
+            if (Go == null || Phase != MatchPhase.MovePieces || Remaining <= 0) return false;
+            var previous = new MoveSnapshot(this);
+            if (!Go.Place(ActiveSide, point, out int captured)) return false;
+            history.Push(previous);
+            int file = point % GoPosition.Size;
+            string coordinate = "" + (char)('A' + file + (file >= 8 ? 1 : 0)) + (point / GoPosition.Size + 1);
+            CompleteBoardAction(ActorName + coordinate + (captured > 0 ? ", взято камней: " + captured : ""));
+            if (Remaining == 0) EndTurn();
+            return true;
+        }
+
+        public bool PassGo()
+        {
+            if (Go == null || Phase == MatchPhase.Finished) return false;
+            Side side = ActiveSide;
+            SetMessage(ActorName + "пас.");
+            if (Go.Pass(side))
+            {
+                int black = Go.Area(Side.Black), white = Go.Area(Side.White);
+                string score = "Чёрные " + black + ", белые " + (white + GoPosition.Komi).ToString("0.0", System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
+                Finish(OwnerOf(black > white + GoPosition.Komi ? Side.Black : Side.White), score);
+            }
+            else
+            {
+                SkipPending = false;
+                EndTurn();
+            }
+            return true;
+        }
+
+        public bool PlaceDomino(int index, bool left)
+        {
+            if (Domino == null || Phase != MatchPhase.MovePieces || Remaining <= 0 || !Domino.CanPlace(ActiveSide, index, left)) return false;
+            var previous = new MoveSnapshot(this);
+            if (!Domino.Place(ActiveSide, index, left, out DominoTile placed)) return false;
+            history.Push(previous);
+            CompleteBoardAction(ActorName + placed + (left ? " слева" : " справа"));
+            if (Domino.Rack(ActiveSide).Count == 0) Finish(Actor, "Все костяшки выложены");
+            else if (!FinishBlockedDomino() && Remaining == 0) EndTurn();
+            return true;
+        }
+
+        public bool DrawDomino()
+        {
+            if (Domino == null || Phase != MatchPhase.MovePieces || !Domino.Draw(ActiveSide)) return false;
+            SetMessage(ActorName + "добор костяшки из базара.");
+            FinishBlockedDomino();
+            return true;
+        }
+
+        public bool PassDomino()
+        {
+            if (Domino == null || Phase != MatchPhase.MovePieces || Domino.StockCount > 0 || Domino.HasPlacement(ActiveSide)) return false;
+            if (FinishBlockedDomino()) return true;
+            SetMessage(ActorName + "нет подходящей костяшки. Пас.");
+            SkipPending = false;
+            EndTurn();
+            return true;
+        }
+
+        bool FinishBlockedDomino()
+        {
+            if (Domino.StockCount > 0 || Domino.HasPlacement(Side.White) || Domino.HasPlacement(Side.Black)) return false;
+            int player = Domino.PipTotal(HumanSide);
+            int opponent = Domino.PipTotal(ChessPosition.Other(HumanSide));
+            int winner = player == opponent ? -1 : player < opponent ? 0 : 1;
+            Finish(winner, "Рыба. Очки на руках: " + player + " у тебя, " + opponent + " у бота");
+            return true;
+        }
+
+        void CompleteBoardAction(string message)
+        {
+            MovesPlayed++;
+            Remaining--;
+            SetMessage(message + ". Осталось ходов: " + Remaining + ".");
+        }
+
         void EndTurn()
         {
-            bool repeat = SkipPending && !Board.InCheck(ChessPosition.Other(ActiveSide));
+            bool repeat = SkipPending && !InCheck(ChessPosition.Other(ActiveSide));
             SkipPending = false; Remaining = 0; Turn++;
             if (repeat) SetMessage("Противник пропускает очередь. Разыграй следующую карту.");
             else Actor = 1 - Actor;
@@ -184,7 +294,7 @@ namespace ChessCards
         }
         void CheckStart()
         {
-            if (Phase == MatchPhase.Finished) return;
+            if (Phase == MatchPhase.Finished || Board == null) return;
             if (Board.LegalMoves(ActiveSide).Count == 0)
             {
                 if (Mode == GameMode.Checkers) Finish(1 - Actor, "Нет шашек или допустимых ходов");
@@ -199,7 +309,7 @@ namespace ChessCards
         }
         public void Resign()
         { if (Phase != MatchPhase.Finished) Finish(1 - Actor, "Сдача"); }
-        public ChessPosition UndoPreview() { return history.Count == 0 ? null : history.Peek().Clone(); }
+        public ChessPosition UndoPreview() { return history.Count == 0 ? null : history.Peek().Board?.Clone(); }
     }
 
     [Serializable]

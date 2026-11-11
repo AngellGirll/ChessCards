@@ -20,12 +20,62 @@ namespace ChessCards
                 double score = random.NextDouble() * 15;
                 if (c.Kind == CardKind.Number) score += c.Number * 60;
                 if (c.Kind == CardKind.Skip) score += 160;
-                if (c.Kind == CardKind.Swap) score += -2 * Evaluate(match.Board, side) + 40;
-                if (c.Kind == CardKind.Undo) score += Evaluate(match.UndoPreview(), side) - Evaluate(match.Board, side) + 30;
+                if (c.Kind == CardKind.Swap) score += -2 * PositionValue(match, side) + 40;
+                if (c.Kind == CardKind.Undo && match.Board != null) score += Evaluate(match.UndoPreview(), side) - Evaluate(match.Board, side) + 30;
                 if (score > bestScore) { bestScore = score; best = index; }
             }
             return best;
         }
+        static int PositionValue(CardMatch match, Side side)
+        {
+            Side opponent = ChessPosition.Other(side);
+            if (match.Go != null) return 24 * match.Go.StoneBalance(side);
+            if (match.Domino != null)
+                return 22 * (match.Domino.Rack(opponent).Count - match.Domino.Rack(side).Count)
+                    + match.Domino.PipTotal(opponent) - match.Domino.PipTotal(side);
+            return Evaluate(match.Board, side);
+        }
+
+        public bool PlayBoardAction(CardMatch match)
+        {
+            Side side = match.ActiveSide;
+            if (match.Go != null)
+            {
+                int point = match.Go.ChoosePoint(side, random);
+                return point < 0 ? match.PassGo() : match.PlaceStone(point);
+            }
+            if (match.Domino == null) return match.Move(ChooseMove(match));
+
+            var domino = match.Domino;
+            var rack = domino.Rack(side);
+            int bestIndex = -1;
+            bool bestLeft = false;
+            double bestScore = double.NegativeInfinity;
+            for (int i = 0; i < rack.Count; i++)
+            {
+                for (int end = 0; end < 2; end++)
+                {
+                    bool left = end == 0;
+                    if (!domino.CanPlace(side, i, left)) continue;
+                    DominoTile tile = rack[i];
+                    int matchingEnd = left ? domino.LeftEnd : domino.RightEnd;
+                    int openEnd = tile.Left == matchingEnd ? tile.Right : tile.Left;
+                    int support = 0;
+                    for (int j = 0; j < rack.Count; j++)
+                    {
+                        if (i != j && rack[j].Matches(openEnd)) support++;
+                    }
+                    double score = tile.Pips * 2 + support * 3 + random.NextDouble();
+                    if (score <= bestScore) continue;
+                    bestIndex = i;
+                    bestLeft = left;
+                    bestScore = score;
+                }
+            }
+            if (bestIndex >= 0) return match.PlaceDomino(bestIndex, bestLeft);
+            return domino.StockCount > 0 ? match.DrawDomino() : match.PassDomino();
+        }
+
         public ChessMove ChooseMove(CardMatch match)
         {
             Side side = match.ActiveSide;

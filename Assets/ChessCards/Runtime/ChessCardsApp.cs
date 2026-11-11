@@ -20,6 +20,7 @@ namespace ChessCards
         GUIStyle text, center, bold;
         bool initialized, location = true, rules, confirmLeave, credited;
         int selected = -1, page;
+        string boardNotice = "";
         const float BotTurnDelay = .85f;
         const float BotMoveDelay = .8f;
         const float BotCardPreviewDelay = 1.4f;
@@ -68,9 +69,10 @@ namespace ChessCards
             int seed = Environment.TickCount;
             match = new CardMatch(seed, null, selectedMode); bot = new ChessBot(seed ^ 76543);
             modeSelection = false;
-            selected = -1; page = 0; promotions = null; credited = false; location = false;
+            selected = -1; selectedMoves.Clear(); page = 0; promotions = null; credited = false; location = false;
             botTurn = -1; pendingBotCard = -1; historyOpen = false;
             cardAnnouncement = ""; cardAnnouncementUntil = 0;
+            boardNotice = "";
             nextBot = Time.unscaledTime + BotTurnDelay;
         }
         void Update()
@@ -116,7 +118,7 @@ namespace ChessCards
                     { nextBot = now + BotTurnDelay; return; }
                 }
             }
-            else match.Move(bot.ChooseMove(match));
+            else bot.PlayBoardAction(match);
             nextBot = now + BotMoveDelay;
             selected = -1; selectedMoves.Clear(); CreditResult();
         }
@@ -124,8 +126,8 @@ namespace ChessCards
         {
             string who = actor == 0 ? "Ты" : "Бот";
             string effect = card.Kind == CardKind.Number ? card.Number + (card.Number == 1 ? " перемещение." : " перемещения подряд.") :
-                card.Kind == CardKind.Swap ? "меняемся армиями; затем 1 перемещение." :
-                card.Kind == CardKind.Undo ? "последнее перемещение возвращается назад." :
+                card.Kind == CardKind.Swap ? "меняемся сторонами, затем 1 ход." :
+                card.Kind == CardKind.Undo ? "отмена последнего хода, затем 1 ход." :
                 "1 перемещение, затем пропуск противника" + (match.Mode == GameMode.Chess ? " (кроме шаха)." : ".");
             cardAnnouncement = who + ": «" + card.Title + "» — " + effect;
             announcementColor = card.Color;
@@ -250,28 +252,31 @@ namespace ChessCards
         {
             if (match == null) { location = true; return; }
             if (Button(new Rect(28, 22, 136, 52), "Во двор", panel, true, 21)) confirmLeave = true;
-            Label(new Rect(182, 20, w - 510, 54), portrait ? (match.Mode == GameMode.Checkers ? "ШАШКИ" : "ШАХМАТЫ") : (match.Mode == GameMode.Checkers ? "ШАШКИ × КАРТЫ" : "ШАХМАТЫ × КАРТЫ"), portrait ? 25 : 32, gold, false, true);
+            Label(new Rect(182, 20, w - 510, 54), ModeTitle(match.Mode) + (portrait ? "" : " × КАРТЫ"), portrait ? 25 : 32, gold, false, true);
             if (Button(new Rect(w - 306, 22, 132, 52), "История", panel, true, 20)) historyOpen = true;
             if (Button(new Rect(w - 160, 22, 132, 52), "Правила", panel, true, 20)) rules = true;
             Fill(new Rect(28, 90, w - 56, portrait ? 100 : 62), panel);
             string side = match.HumanSide == Side.White ? "белые" : "чёрные";
-            string phase = match.Phase == MatchPhase.Finished ? match.Result : (match.Actor == 0 ? "Твоя очередь" : "Ход бота") + "  •  " + (match.Phase == MatchPhase.ChooseCard ? "выбор карты" : match.Board.ForcedCaptureFrom >= 0 ? "продолжи взятие" : "перемещений: " + match.Remaining);
+            string phase = match.Phase == MatchPhase.Finished ? match.Result : (match.Actor == 0 ? "Твоя очередь" : "Ход бота") + "  •  " + (match.Phase == MatchPhase.ChooseCard ? "выбор карты" : match.Board != null && match.Board.ForcedCaptureFrom >= 0 ? "продолжи взятие" : "перемещений: " + match.Remaining);
             Label(new Rect(42, 94, w - 84, portrait ? 48 : 30), phase, portrait ? 23 : 24, match.Actor == 0 ? gold : ink, false, true);
-            Label(new Rect(42, portrait ? 140 : 124, w - 84, 34), "Ты: " + side + "  •  Очередь №" + match.Turn + "  •  Карт у бота: " + match.Hands[1].Count, portrait ? 20 : 18, muted);
+            string playerInfo = match.Domino == null ? "Ты: " + side : "Костяшек у бота: " + match.Domino.Rack(match.SideFor(1)).Count;
+            Label(new Rect(42, portrait ? 140 : 124, w - 84, 34), playerInfo + "  •  Очередь №" + match.Turn + "  •  Карт у бота: " + match.Hands[1].Count, portrait ? 20 : 18, muted);
             float size = portrait ? 560 : 496;
             Rect board = new Rect(portrait ? 80 : 48, portrait ? 210 : 190, size, size);
-            DrawBoard(board);
+            if (match.Go != null) DrawGoBoard(board);
+            else if (match.Domino != null) DrawDominoBoard(board);
+            else DrawBoard(board);
             float right = portrait ? 32 : 590, top = portrait ? 802 : 180, width = portrait ? 656 : 650;
             DrawCards(right, top, width);
             float messageY = portrait ? 1126 : 508;
             float messageHeight = match.Phase == MatchPhase.Finished && portrait ? 30 : portrait ? 64 : 70;
-            bool announcing = match.Phase != MatchPhase.Finished && Time.unscaledTime < cardAnnouncementUntil && cardAnnouncement.Length > 0;
+            bool announcing = boardNotice.Length == 0 && match.Phase != MatchPhase.Finished && Time.unscaledTime < cardAnnouncementUntil && cardAnnouncement.Length > 0;
             if (announcing)
             {
                 Fill(new Rect(right, messageY, width, messageHeight), cardColors[announcementColor]);
                 Label(new Rect(right + 12, messageY + 4, width - 24, messageHeight - 8), cardAnnouncement, 21, ink);
             }
-            else Label(new Rect(right, messageY, width, messageHeight), match.Message, 21, muted);
+            else Label(new Rect(right, messageY, width, messageHeight), boardNotice.Length > 0 ? boardNotice : match.Message, 21, muted);
             float actionY = portrait ? 1200 : 650;
             if (match.Phase == MatchPhase.Finished)
             {
@@ -282,9 +287,13 @@ namespace ChessCards
             else
             {
                 bool canDraw = match.Actor == 0 && match.Phase == MatchPhase.ChooseCard && match.PlayableCards().Count == 0;
-                if (Button(new Rect(right, actionY, width * .56f, 54), "Взять карту", Hex("386579"), canDraw))
-                { match.Draw(); page = Math.Max(0, (match.Hands[0].Count - 1) / 4); selected = -1; CreditResult(); GUIUtility.ExitGUI(); }
-                Label(new Rect(right + width * .59f, actionY, width * .41f, 54), "Колода: " + match.DeckCount + "\nСброс: " + match.DiscardCount, 18, muted, true);
+                float drawWidth = match.Go == null ? width * .56f : width * .38f;
+                if (Button(new Rect(right, actionY, drawWidth, 54), "Взять карту", Hex("386579"), canDraw))
+                { match.Draw(); page = Math.Max(0, (match.Hands[0].Count - 1) / 4); selected = -1; boardNotice = ""; CreditResult(); GUIUtility.ExitGUI(); }
+                if (match.Go != null && Button(new Rect(right + width * .41f, actionY, width * .22f, 54), "Пас", panel, match.Actor == 0))
+                { match.PassGo(); boardNotice = ""; cardAnnouncementUntil = 0; CreditResult(); GUIUtility.ExitGUI(); }
+                float deckStart = match.Go == null ? .59f : .65f;
+                Label(new Rect(right + width * deckStart, actionY, width * (1 - deckStart), 54), "Колода: " + match.DeckCount + "\nСброс: " + match.DiscardCount, 18, muted, true);
             }
             if (!portrait && match.Phase != MatchPhase.Finished)
             {
@@ -294,6 +303,136 @@ namespace ChessCards
                 Label(new Rect(right, 584, width, 56), lines, 17, muted);
             }
         }
+        void DrawGoBoard(Rect r)
+        {
+            int size = GoPosition.Size;
+            float cell = r.width / size;
+            Fill(new Rect(r.x - 4, r.y - 4, r.width + 8, r.height + 8), Hex("8F663B"));
+            Fill(r, Hex("DDB274"));
+            Color grid = Hex("705233");
+            float left = r.x + cell / 2, top = r.y + cell / 2;
+            for (int i = 0; i < size; i++)
+            {
+                Fill(new Rect(left + i * cell - 1, top, 2, cell * (size - 1)), grid);
+                Fill(new Rect(left, top + i * cell - 1, cell * (size - 1), 2), grid);
+                Label(new Rect(r.x + i * cell, r.y + r.height + 4, cell, 22), ((char)('A' + i + (i >= 8 ? 1 : 0))).ToString(), 16, muted, true);
+                Label(new Rect(r.x - 29, r.y + i * cell, 22, cell), (size - i).ToString(), 16, muted, true);
+            }
+            for (int row = 0; row < size; row++) for (int col = 0; col < size; col++)
+            {
+                int point = (size - 1 - row) * size + col;
+                var target = new Rect(r.x + col * cell, r.y + row * cell, cell, cell);
+                Side? stone = match.Go.StoneAt(point);
+                if (stone.HasValue)
+                {
+                    var icon = pieces[(int)stone.Value, (int)PieceType.Checker];
+                    if (icon != null) GUI.DrawTexture(target, icon, ScaleMode.ScaleToFit);
+                    else Label(target, stone == Side.White ? "○" : "●", 28, grid, true);
+                    if (match.Go.LastPoint == point) Fill(new Rect(target.x + cell / 2 - 3, target.y + cell / 2 - 3, 6, 6), gold);
+                }
+                else if ((row == 2 || row == 6) && (col == 2 || col == 6) || row == 4 && col == 4)
+                    Fill(new Rect(target.x + cell / 2 - 3, target.y + cell / 2 - 3, 6, 6), grid);
+
+                if (!stone.HasValue && match.Actor == 0 && match.Phase == MatchPhase.MovePieces &&
+                    GUI.Button(target, GUIContent.none, GUIStyle.none))
+                {
+                    bool placed = match.PlaceStone(point);
+                    boardNotice = placed ? "" : "Этот ход оставляет группу без свободных точек или повторяет позицию.";
+                    cardAnnouncementUntil = 0;
+                    CreditResult();
+                    GUIUtility.ExitGUI();
+                }
+            }
+        }
+
+        void DrawDominoBoard(Rect r)
+        {
+            var domino = match.Domino;
+            var rack = domino.Rack(match.HumanSide);
+            bool active = match.Actor == 0 && match.Phase == MatchPhase.MovePieces;
+            bool canMove = active && domino.HasPlacement(match.HumanSide);
+            float tileWidth = (r.width - 62) / 7;
+            float tileHeight = 30;
+            Fill(r, panel);
+            Label(new Rect(r.x + 16, r.y + 6, r.width - 32, 33), "Цепочка", 24, gold, false, true);
+            if (domino.Chain.Count == 0)
+                Label(new Rect(r.x + 16, r.y + 44, r.width - 32, 70), "Первой можно выложить любую костяшку.", 20, muted, true);
+            else
+            {
+                Label(new Rect(r.x + 16, r.y + 40, r.width - 32, 28),
+                    "Слева " + domino.LeftEnd + "    •    Справа " + domino.RightEnd, 18, muted);
+                for (int i = 0; i < domino.Chain.Count; i++)
+                    DrawDominoTile(new Rect(r.x + 16 + i % 7 * (tileWidth + 5), r.y + 72 + i / 7 * 38, tileWidth, tileHeight), domino.Chain[i], false);
+            }
+
+            float half = (r.width - 48) / 2;
+            if (Button(new Rect(r.x + 16, r.y + 231, half, 48), "Выложить слева", Hex("386579"),
+                canMove && domino.CanPlace(match.HumanSide, selected, true), 18))
+                PlaySelectedDomino(true);
+            if (Button(new Rect(r.x + 32 + half, r.y + 231, half, 48), "Выложить справа", Hex("386579"),
+                canMove && domino.CanPlace(match.HumanSide, selected, false), 18))
+                PlaySelectedDomino(false);
+
+            if (active && !canMove)
+            {
+                string action = domino.StockCount > 0 ? "Взять из базара · " + domino.StockCount : "Пас · базар пуст";
+                if (Button(new Rect(r.x + 16, r.y + 286, r.width - 32, 43), action, Hex("87643B"), true, 19))
+                {
+                    if (domino.StockCount > 0) match.DrawDomino(); else match.PassDomino();
+                    selected = -1; cardAnnouncementUntil = 0;
+                    CreditResult();
+                    GUIUtility.ExitGUI();
+                }
+            }
+            else Label(new Rect(r.x + 16, r.y + 286, r.width - 32, 43),
+                (canMove ? "Выбери костяшку и край цепочки" : "Базар: " + domino.StockCount), 18, muted, true);
+
+            Label(new Rect(r.x + 16, r.y + 330, r.width - 32, 29), "Твои костяшки · " + rack.Count, 19, gold);
+            for (int i = 0; i < rack.Count; i++)
+            {
+                var target = new Rect(r.x + 16 + i % 7 * (tileWidth + 5), r.y + 361 + i / 7 * 40, tileWidth, tileHeight);
+                bool fits = canMove && (domino.CanPlace(match.HumanSide, i, true) || domino.CanPlace(match.HumanSide, i, false));
+                DrawDominoTile(target, rack[i], fits && selected == i);
+                if (active && !fits) Fill(target, new Color(0, 0, 0, .24f));
+                if (fits && GUI.Button(target, GUIContent.none, GUIStyle.none))
+                { selected = selected == i ? -1 : i; GUIUtility.ExitGUI(); }
+            }
+        }
+
+        void PlaySelectedDomino(bool left)
+        {
+            match.PlaceDomino(selected, left);
+            selected = -1; cardAnnouncementUntil = 0;
+            CreditResult();
+            GUIUtility.ExitGUI();
+        }
+
+        void DrawDominoTile(Rect r, DominoTile tile, bool highlighted)
+        {
+            Color edge = highlighted ? gold : Hex("9F8B68");
+            Fill(r, edge);
+            Fill(new Rect(r.x + 2, r.y + 2, r.width - 4, r.height - 4), Hex("F6E8CB"));
+            Fill(new Rect(r.x + r.width / 2 - 1, r.y + 3, 2, r.height - 6), edge);
+            DrawPips(r.x + r.width / 4, r.y + r.height / 2, r.height, tile.Left);
+            DrawPips(r.x + r.width * .75f, r.y + r.height / 2, r.height, tile.Right);
+        }
+
+        void DrawPips(float x, float y, float size, int number)
+        {
+            float delta = size * .21f;
+            float pip = size * .11f;
+            Color color = Hex("273548");
+            for (int row = -1; row <= 1; row++) for (int col = -1; col <= 1; col++)
+            {
+                bool centerPip = row == 0 && col == 0 && number % 2 == 1;
+                bool diagonal = row != 0 && row == col && number >= 2;
+                bool otherDiagonal = row != 0 && row == -col && number >= 4;
+                bool middleSides = row == 0 && col != 0 && number == 6;
+                if (centerPip || diagonal || otherDiagonal || middleSides)
+                    Fill(new Rect(x + col * delta - pip / 2, y + row * delta - pip / 2, pip, pip), color);
+            }
+        }
+
         void DrawBoard(Rect r)
         {
             float cell = r.width / 8;
@@ -408,7 +547,7 @@ namespace ChessCards
                 DrawCardFace(r, card, playable, playable ? 1 : .66f);
                 bool old = GUI.enabled; GUI.enabled = old && playable;
                 if (GUI.Button(r, new GUIContent("", match.Actor == 0 ? match.UnavailableReason(i) : "Ход бота"), GUIStyle.none))
-                { if (match.PlayCard(i)) AnnounceCard(card, 0); selected = -1; selectedMoves.Clear(); CreditResult(); GUIUtility.ExitGUI(); }
+                { if (match.PlayCard(i)) AnnounceCard(card, 0); selected = -1; selectedMoves.Clear(); boardNotice = ""; CreditResult(); GUIUtility.ExitGUI(); }
                 GUI.enabled = old;
             }
             if (count == 0) Label(new Rect(x, y + 152, width, 150), "Рука пуста. В свою очередь возьми карту.", 22, muted, true);
@@ -437,26 +576,48 @@ namespace ChessCards
                 { match.Move(promotions[i]); promotions = null; CreditResult(); GUIUtility.ExitGUI(); }
             }
         }
-        void DrawModeChoice(Rect r, GameMode mode, string title, string description)
+        static string ModeTitle(GameMode mode)
         {
-            if (Button(r, "", mode == selectedMode ? Hex("3C4A5C") : panel))
-            { selectedMode = mode; StartMatch(); GUIUtility.ExitGUI(); }
-            Texture2D icon = pieces[0, (int)(mode == GameMode.Chess ? PieceType.King : PieceType.Checker)];
-            if (icon != null) GUI.DrawTexture(new Rect(r.x + 18, r.y + 25, 94, 94), icon, ScaleMode.ScaleToFit);
-            Label(new Rect(r.x + 128, r.y + 14, r.width - 146, 48), title, portrait ? 28 : 25, gold, false, true);
-            Label(new Rect(r.x + 128, r.y + 66, r.width - 146, r.height - 82), description, 20, ink);
+            switch (mode)
+            {
+                case GameMode.Checkers: return "ШАШКИ";
+                case GameMode.Go: return "ГО";
+                case GameMode.Domino: return "ДОМИНО";
+                default: return "ШАХМАТЫ";
+            }
         }
+
+        void DrawModeChoice(Rect r, GameMode mode, string description)
+        {
+            if (Button(r, "", mode == selectedMode ? Hex("3C4A5C") : Hex("303C50")))
+            { selectedMode = mode; StartMatch(); GUIUtility.ExitGUI(); }
+            if (mode == GameMode.Domino) DrawDominoTile(new Rect(r.x + 12, r.y + 38, 58, 32), new DominoTile(2, 5), false);
+            else
+            {
+                Texture2D icon = mode == GameMode.Chess ? pieces[0, (int)PieceType.King] :
+                    pieces[mode == GameMode.Go ? 1 : 0, (int)PieceType.Checker];
+                if (icon != null) GUI.DrawTexture(new Rect(r.x + 10, r.y + 24, 62, 62), icon, ScaleMode.ScaleToFit);
+            }
+            Label(new Rect(r.x + 82, r.y + 12, r.width - 94, 42), ModeTitle(mode), 25, gold, false, true);
+            Label(new Rect(r.x + 82, r.y + 53, r.width - 94, r.height - 61), description, 19, ink);
+        }
+
         void DrawModeSelection()
         {
             Rect r = portrait ? new Rect(40, h / 2 - 300, w - 80, 600) : new Rect(200, 100, 880, 520);
             Overlay(r, "Выбери игру");
-            Rect chess = portrait ? new Rect(r.x + 24, r.y + 100, r.width - 48, 168) : new Rect(r.x + 24, r.y + 110, 404, 235);
-            Rect checkers = portrait ? new Rect(r.x + 24, r.y + 288, r.width - 48, 168) : new Rect(r.x + 452, r.y + 110, 404, 235);
-            DrawModeChoice(chess, GameMode.Chess, "ШАХМАТЫ", "Поставь мат королю.\nКарты управляют перемещениями фигур.");
-            DrawModeChoice(checkers, GameMode.Checkers, "ШАШКИ", "Русские шашки 8×8.\nЗабери или заблокируй все шашки соперника.");
-            Label(new Rect(r.x + 24, r.y + r.height - 134, r.width - 48, 40), "Общие карты, монеты и восстановление двора", 20, muted, true);
+            float tileWidth = (r.width - 64) / 2;
+            float tileHeight = portrait ? 166 : 148;
+            var modes = new[] { GameMode.Chess, GameMode.Checkers, GameMode.Go, GameMode.Domino };
+            var descriptions = new[] { "Поставь мат королю.", "Русские шашки 8×8.", "Займи территорию на доске 9×9.", "Выложи все костяшки." };
+            for (int i = 0; i < modes.Length; i++)
+            {
+                var tile = new Rect(r.x + 24 + i % 2 * (tileWidth + 16), r.y + 100 + i / 2 * (tileHeight + 16), tileWidth, tileHeight);
+                DrawModeChoice(tile, modes[i], descriptions[i]);
+            }
             if (Button(new Rect(r.x + 24, r.y + r.height - 80, r.width - 48, 56), "Назад", Hex("87643B"))) modeSelection = false;
         }
+
         void DrawHistory()
         {
             Rect r = new Rect(24, 24, w - 48, h - 48);
@@ -495,6 +656,15 @@ namespace ChessCards
                     "СПЕЦИАЛЬНЫЕ КАРТЫ\nОбмен меняет владельцев армий и разворачивает доску. Отмена возвращает последнее завершённое перемещение целиком, включая всю цепочку взятий. Пропуск даёт одно перемещение, затем противник пропускает очередь. У каждой специальной карты есть одно своё перемещение после эффекта.\n\n" +
                     "НИЧЬЯ\nПосле 15 завершённых перемещений дамками каждой стороны без взятия и движения простой шашки. Остальные турнирные ограничения ничьей в прототипе не проверяются.\n\n" +
                     "НАГРАДА И УПРАВЛЕНИЕ\nЗа победу — 100 монет в общий баланс двора. Нажми карту, шашку и подсвеченную клетку. Во время серии выбирай следующую подсвеченную клетку. История показывает карты и перемещения. Партия при закрытии не сохраняется, монеты и ремонт сохраняются.";
+            GameMode mode = location || match == null ? selectedMode : match.Mode;
+            if (mode == GameMode.Go)
+                content = "ГО 9×9\nТы начинаешь чёрными. Нажимай на свободные пересечения линий. Камни соединяются по горизонтали и вертикали. Когда у группы противника не остаётся соседних свободных точек, её камни снимаются. Нельзя оставлять свою группу без свободных точек или повторять уже сыгранную позицию.\n\n" +
+                    "КАРТЫ\nКарта даёт 1–3 постановки камней. Обмен меняет цвета, отмена возвращает позицию до последней постановки, а пропуск даёт один ход и оставляет очередь у сыгравшего карту. Правила подбора карт по цвету и значению общие.\n\n" +
+                    "ПАС И ПОДСЧЁТ\nПас завершает очередь, в том числе до выбора карты. После пасов обеих сторон подряд считаются камни на доске и окружённые свободные точки. Белым добавляется 7,5 очка. Спорные группы нужно снять ходами до паса. Победа даёт 100 монет.";
+            else if (mode == GameMode.Domino)
+                content = "ДОМИНО С ДОБОРОМ\nНабор 0–6. На старте по 7 костяшек. Первый ход твой, выложи любую. Дальше выбери костяшку и нажми кнопку края цепочки с таким же числом точек.\n\n" +
+                    "КАРТЫ И БАЗАР\nКарта даёт 1–3 выкладывания. Обмен меняет руки костяшек, отмена возвращает позицию до последнего выкладывания, пропуск даёт один ход и оставляет очередь у сыгравшего карту. Если подходящей костяшки нет, после розыгрыша карты бери из базара до подходящей. Добор костяшки не тратит ход карты. При пустом базаре пас передаёт очередь.\n\n" +
+                    "ПОБЕДА\nПобеждает тот, кто первым выложил все костяшки. Если базар пуст и оба заблокированы, выигрывает тот, у кого на руках меньше точек. При равенстве ничья. Победа даёт 100 монет.";
             GUIStyle ruleStyle = new GUIStyle(text) { fontSize = portrait ? 23 : 21, alignment = TextAnchor.UpperLeft };
             float contentHeight = ruleStyle.CalcHeight(new GUIContent(content), view.width - 36) + 20;
             rulesScroll = GUI.BeginScrollView(view, rulesScroll, new Rect(0, 0, view.width - 26, contentHeight));

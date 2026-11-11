@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace ChessCards
 {
     public enum Side { White, Black }
-    public enum GameMode { Chess, Checkers }
+    public enum GameMode { Chess, Checkers, Go, Domino }
     public enum PieceType { None, Pawn, Knight, Bishop, Rook, Queen, King, Checker, CrownedChecker }
 
     public struct Piece
