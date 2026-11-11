@@ -137,15 +137,15 @@ namespace ChessCards
             return side == Side.Black ? black > white + Komi : white + Komi > black;
         }
 
-        internal int ChoosePoint(Side side, Random random)
+        internal int ChoosePoint(Side side, Random random, BotDifficulty difficulty = BotDifficulty.Normal)
         {
             if (AcceptPass(side)) return -1;
             int best = -1;
-            double bestScore = double.NegativeInfinity;
+            double bestScore = double.NegativeInfinity, bestPosition = double.NegativeInfinity;
             byte color = Color(side);
             for (int point = 0; point < PointCount; point++)
             {
-                if (!TryPosition(side, point, out _, out int captures, out int liberties)) continue;
+                if (!TryPosition(side, point, out byte[] after, out int captures, out int liberties)) continue;
                 int friendly = 0, enemy = 0;
                 foreach (int neighbor in Neighbors[point])
                 {
@@ -158,11 +158,28 @@ namespace ChessCards
                 double score = 18 * captures + Math.Min(liberties, 5) * 2 + enemy * 2
                     + Math.Min(friendly, 2) + Math.Min(edge, 2) - (liberties == 1 ? 13 : 0)
                     + random.NextDouble() * 2;
+                if (difficulty == BotDifficulty.Hard) score += AtariPressure(after, point, color);
+                bestPosition = Math.Max(bestPosition, score);
+                if (difficulty == BotDifficulty.Easy) score += random.NextDouble() * 17;
                 if (score <= bestScore) continue;
                 best = point;
                 bestScore = score;
             }
-            return Occupied >= 24 && bestScore < 0 ? -1 : best;
+            return Occupied >= 24 && bestPosition < 0 ? -1 : best;
+        }
+
+        static int AtariPressure(byte[] board, int point, byte color)
+        {
+            int pressure = 0;
+            var group = new List<int>(PointCount);
+            var assessed = new HashSet<int>();
+            foreach (int neighbor in Neighbors[point])
+            {
+                if (board[neighbor] == 0 || board[neighbor] == color || assessed.Contains(neighbor)) continue;
+                if (GroupLiberties(board, neighbor, group) == 1) pressure += 4 + 2 * group.Count;
+                foreach (int member in group) assessed.Add(member);
+            }
+            return pressure;
         }
 
         bool TryPosition(Side side, int point, out byte[] next, out int captured, out int liberties)

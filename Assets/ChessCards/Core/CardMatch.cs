@@ -15,6 +15,11 @@ namespace ChessCards
         { return Color == top.Color || (Kind == top.Kind && (Kind != CardKind.Number || Number == top.Number)); }
         public string Title
         { get { return Kind == CardKind.Number ? Number.ToString() : Kind == CardKind.Swap ? "ОБМЕН" : Kind == CardKind.Undo ? "ОТМЕНА" : "ПРОПУСК"; } }
+        public string GetTitle(bool english)
+        { return !english || Kind == CardKind.Number ? Title : Kind == CardKind.Swap ? "SWAP" : Kind == CardKind.Undo ? "UNDO" : "SKIP"; }
+        public string GetColorName(bool english)
+        { return english ? EnglishColors[Color] : ColorName; }
+        static readonly string[] EnglishColors = { "Red", "Blue", "Green", "Yellow" };
         public string ColorName
         { get { return new[] { "Красная", "Синяя", "Зелёная", "Жёлтая" }[Color]; } }
     }
@@ -57,6 +62,11 @@ namespace ChessCards
         public string Result { get; private set; }
         public ChessMove? LastMove { get; private set; }
         public readonly List<string> Log = new List<string>();
+        readonly List<string> englishLog = new List<string>();
+        string englishMessage, englishResult;
+        public IReadOnlyList<string> GetLog(bool english) { return english ? englishLog : Log; }
+        public string GetMessage(bool english) { return english ? englishMessage : Message; }
+        public string GetResult(bool english) { return english ? englishResult : Result; }
         public int DeckCount { get { return deck.Count; } }
         public int DiscardCount { get { return discard.Count; } }
         public int HistoryCount { get { return history.Count; } }
@@ -83,7 +93,7 @@ namespace ChessCards
             for (int actor = 0; actor < 2; actor++) for (int n = 0; n < 5; n++) Hands[actor].Add(Pop());
             int start = deck.FindIndex(c => c.Kind == CardKind.Number);
             discard.Add(deck[start]); deck.RemoveAt(start);
-            SetMessage("Выбери карту по цвету или значению."); CheckStart();
+            SetMessage("Выбери карту по цвету или значению.", "Choose a card of the same color or value."); CheckStart();
         }
         void Shuffle(List<Card> cards)
         {
@@ -91,26 +101,39 @@ namespace ChessCards
             { int j = random.Next(i + 1); Card t = cards[i]; cards[i] = cards[j]; cards[j] = t; }
         }
         Card Pop() { int last = deck.Count - 1; Card card = deck[last]; deck.RemoveAt(last); return card; }
-        void SetMessage(string text)
+        void SetMessage(string russian, string english)
         {
-            Message = text; Log.Add(text); if (Log.Count > 60) Log.RemoveAt(0);
+            Message = russian;
+            englishMessage = english;
+            Log.Add(russian);
+            englishLog.Add(english);
+            if (Log.Count > 60)
+            {
+                Log.RemoveAt(0);
+                englishLog.RemoveAt(0);
+            }
         }
-        public string UnavailableReason(int index)
+        public string UnavailableReason(int index, bool english = false)
         {
-            if (Phase != MatchPhase.ChooseCard) return "Сейчас нужно перемещать фигуры.";
-            if (index < 0 || index >= Hands[Actor].Count) return "Нет такой карты.";
+            if (Phase != MatchPhase.ChooseCard)
+                return english ? "Play an action on the board first." : "Сейчас нужно сделать ход на поле.";
+            if (index < 0 || index >= Hands[Actor].Count)
+                return english ? "There is no such card." : "Нет такой карты.";
             Card card = Hands[Actor][index];
-            if (!card.Matches(Top)) return "Нужен тот же цвет или то же значение.";
+            if (!card.Matches(Top))
+                return english ? "Match the color or value." : "Нужен тот же цвет или то же значение.";
             if (card.Kind == CardKind.Swap && (InCheck(Side.White) || InCheck(Side.Black)))
-                return "Обмен недоступен, пока король под шахом.";
+                return english ? "You cannot swap while a king is in check." : "Обмен недоступен, пока король под шахом.";
             if (card.Kind == CardKind.Undo)
             {
-                if (history.Count == 0) return "Пока нечего отменять.";
+                if (history.Count == 0) return english ? "No move to undo yet." : "Пока нечего отменять.";
                 ChessPosition previous = history.Peek().Board;
                 if (previous != null)
                 {
-                    if (previous.InCheck(ChessPosition.Other(ActiveSide))) return "Нельзя отменить защиту от шаха и ходить снова.";
-                    if (previous.LegalMoves(ActiveSide).Count == 0) return "После отмены нет легального перемещения.";
+                    if (previous.InCheck(ChessPosition.Other(ActiveSide)))
+                        return english ? "You cannot undo a defense against check and move again." : "Нельзя отменить защиту от шаха и ходить снова.";
+                    if (previous.LegalMoves(ActiveSide).Count == 0)
+                        return english ? "There would be no legal move after undoing." : "После отмены нет легального перемещения.";
                 }
             }
             return "";
@@ -127,11 +150,12 @@ namespace ChessCards
         {
             if (!CanPlay(index)) return false;
             Card card = Hands[Actor][index]; Hands[Actor].RemoveAt(index); discard.Add(card);
-            string effect = (Actor == 0 ? "Ты: " : "Бот: ") + card.ColorName + " «" + card.Title + "». ";
+            string effect = ActorName + card.ColorName + " «" + card.Title + "». ";
+            string effectEnglish = ActorNameEnglish + card.GetColorName(true) + " " + card.GetTitle(true) + ". ";
             Remaining = card.Kind == CardKind.Number ? card.Number : 1;
             SkipPending = card.Kind == CardKind.Skip;
             if (card.Kind == CardKind.Swap)
-            { HumanSide = ChessPosition.Other(HumanSide); effect += "Стороны поменялись. "; }
+            { HumanSide = ChessPosition.Other(HumanSide); effect += "Стороны поменялись. "; effectEnglish += "Sides swapped. "; }
             if (card.Kind == CardKind.Undo)
             {
                 var previous = history.Pop();
@@ -139,9 +163,10 @@ namespace ChessCards
                 Go?.ClearPass();
                 LastMove = null;
                 effect += "Последний ход отменён. ";
+                effectEnglish += "Last move undone. ";
             }
             Phase = MatchPhase.MovePieces;
-            SetMessage(effect + "Перемещений: " + Remaining + ".");
+            SetMessage(effect + "Перемещений: " + Remaining + ".", effectEnglish + "Moves: " + Remaining + ".");
             CheckStart();
             return true;
         }
@@ -156,14 +181,14 @@ namespace ChessCards
             if (deck.Count > 0)
             {
                 Hands[Actor].Add(Pop()); int index = Hands[Actor].Count - 1;
-                if (CanPlay(index)) { SetMessage("Добрана подходящая карта — разыграй её."); return true; }
+                if (CanPlay(index)) { SetMessage("Добрана подходящая карта — разыграй её.", "The card you drew matches. Play it now."); return true; }
             }
             if (InCheck(ActiveSide))
             {
                 Phase = MatchPhase.MovePieces; Remaining = 1;
-                SetMessage("Подходящей карты нет, но король под шахом: одно защитное перемещение.");
+                SetMessage("Подходящей карты нет, но король под шахом: одно защитное перемещение.", "No matching card. You still get one move to escape check.");
             }
-            else { SetMessage("Подходящая карта не пришла. Очередь переходит противнику."); EndTurn(); }
+            else { SetMessage("Подходящая карта не пришла. Очередь переходит противнику.", "The card did not match. The other player takes their turn."); EndTurn(); }
             return true;
         }
         public bool Move(ChessMove wanted)
@@ -179,34 +204,41 @@ namespace ChessCards
             Board.ApplyUnchecked(wanted); LastMove = wanted;
             if (Mode == GameMode.Checkers && Board.ForcedCaptureFrom >= 0)
             {
-                SetMessage((Actor == 0 ? "Ты: " : "Бот: ") + wanted + " — продолжи взятие этой же шашкой.");
+                SetMessage(ActorName + wanted + " — продолжи взятие этой же шашкой.", ActorNameEnglish + wanted + " — continue capturing with the same piece.");
                 return true; // Do not spend the next card move or hand off mid-capture.
             }
             MovesPlayed++; Remaining--;
             if (Mode == GameMode.Checkers)
             {
-                SetMessage((Actor == 0 ? "Ты: " : "Бот: ") + wanted + ". Осталось перемещений: " + Remaining + ".");
+                SetMessage(ActorName + wanted + ". Осталось перемещений: " + Remaining + ".", ActorNameEnglish + wanted + ". Moves left: " + Remaining + ".");
                 if (Board.LegalMoves(ChessPosition.Other(mover)).Count == 0)
-                { Finish(Actor, "У противника нет шашек или допустимых ходов"); return true; }
+                { Finish(Actor, "У противника нет шашек или допустимых ходов", "The opponent has no pieces or legal moves"); return true; }
                 if (Board.WhiteKingQuietMoves >= 15 && Board.BlackKingQuietMoves >= 15)
-                { Finish(-1, "По 15 ходов дамками без взятия и движения простых шашек"); return true; }
+                { Finish(-1, "По 15 ходов дамками без взятия и движения простых шашек", "Both sides played 15 king moves without a capture or man move"); return true; }
                 if (Remaining == 0 || Board.LegalMoves(mover).Count == 0) EndTurn();
                 return true;
             }
             Side enemy = ChessPosition.Other(mover);
             bool check = Board.InCheck(enemy);
             var replies = Board.LegalMoves(enemy);
-            string moveText = (Actor == 0 ? "Ты: " : "Бот: ") + wanted + (check ? " — шах!" : "");
-            SetMessage(moveText);
-            if (check && replies.Count == 0) { Finish(Actor, "Мат"); return true; }
-            if (Board.BareKings()) { Finish(-1, "На доске остались только короли"); return true; }
-            if (Board.QuietMoves >= 100) { Finish(-1, "50 ходов без взятия и движения пешек"); return true; }
+            string moveText = ActorName + wanted + (check ? " — шах!" : "");
+            string moveTextEnglish = ActorNameEnglish + wanted + (check ? " — check!" : "");
+            SetMessage(moveText, moveTextEnglish);
+            if (check && replies.Count == 0) { Finish(Actor, "Мат", "Checkmate"); return true; }
+            if (Board.BareKings()) { Finish(-1, "На доске остались только короли", "Only kings remain"); return true; }
+            if (Board.QuietMoves >= 100) { Finish(-1, "50 ходов без взятия и движения пешек", "50 moves without a capture or pawn move"); return true; }
             if (check || Remaining == 0 || Board.LegalMoves(mover).Count == 0) EndTurn();
-            else Message = moveText + " Осталось перемещений: " + Remaining + ".";
+            else
+            {
+                Message = moveText + " Осталось перемещений: " + Remaining + ".";
+                englishMessage = moveTextEnglish + " Moves left: " + Remaining + ".";
+            }
             return true;
         }
         bool InCheck(Side side) { return Board != null && Board.InCheck(side); }
         string ActorName { get { return Actor == 0 ? "Ты: " : "Бот: "; } }
+
+        string ActorNameEnglish { get { return Actor == 0 ? "You: " : "Bot: "; } }
 
         public bool PlaceStone(int point)
         {
@@ -216,7 +248,8 @@ namespace ChessCards
             history.Push(previous);
             int file = point % GoPosition.Size;
             string coordinate = "" + (char)('A' + file + (file >= 8 ? 1 : 0)) + (point / GoPosition.Size + 1);
-            CompleteBoardAction(ActorName + coordinate + (captured > 0 ? ", взято камней: " + captured : ""));
+            CompleteBoardAction(ActorName + coordinate + (captured > 0 ? ", взято камней: " + captured : ""),
+                ActorNameEnglish + coordinate + (captured > 0 ? ", stones captured: " + captured : ""));
             if (Remaining == 0) EndTurn();
             return true;
         }
@@ -224,7 +257,7 @@ namespace ChessCards
         public bool PassGo()
         {
             if (Go == null || (Phase != MatchPhase.ChooseCard && Phase != MatchPhase.MovePieces)) return false;
-            SetMessage(ActorName + "пас.");
+            SetMessage(ActorName + "пас.", ActorNameEnglish + "pass.");
             SkipPending = false;
             if (Go.Pass(ActiveSide))
             {
@@ -232,7 +265,7 @@ namespace ChessCards
                 Phase = MatchPhase.GoScoring;
                 deadGoStones = new bool[GoPosition.PointCount];
                 UpdateGoScore();
-                SetMessage("Два паса подряд. Начался подсчёт очков.");
+                SetMessage("Два паса подряд. Начался подсчёт очков.", "Two consecutive passes. Scoring has started.");
             }
             else EndTurn();
             return true;
@@ -255,21 +288,20 @@ namespace ChessCards
             Go.CountAreas(out goBlackArea, out goWhiteArea, deadGoStones);
         }
 
-        public string GoScoreText
+        public string GoScoreText { get { return GetGoScoreText(false); } }
+
+        public string GetGoScoreText(bool english)
         {
-            get
-            {
-                string white = (goWhiteArea + GoPosition.Komi).ToString("0.0",
-                    System.Globalization.CultureInfo.GetCultureInfo("ru-RU"));
-                return "Чёрные " + goBlackArea + "  ·  Белые " + white;
-            }
+            string white = (goWhiteArea + GoPosition.Komi).ToString("0.0",
+                System.Globalization.CultureInfo.InvariantCulture);
+            return english ? "Black " + goBlackArea + "  ·  White " + white : "Чёрные " + goBlackArea + "  ·  Белые " + white.Replace('.', ',');
         }
 
         public bool ConfirmGoScore()
         {
             if (Phase != MatchPhase.GoScoring) return false;
             Side winner = goBlackArea > goWhiteArea + GoPosition.Komi ? Side.Black : Side.White;
-            Finish(OwnerOf(winner), GoScoreText);
+            Finish(OwnerOf(winner), GoScoreText, GetGoScoreText(true));
             return true;
         }
 
@@ -278,7 +310,7 @@ namespace ChessCards
             if (Phase != MatchPhase.GoScoring) return false;
             deadGoStones = null;
             Go.ClearPass();
-            SetMessage("Партия продолжена.");
+            SetMessage("Партия продолжена.", "Play resumed.");
             EndTurn();
             return true;
         }
@@ -289,8 +321,8 @@ namespace ChessCards
             var previous = new MoveSnapshot(this);
             if (!Domino.Place(ActiveSide, index, left, out DominoTile placed)) return false;
             history.Push(previous);
-            CompleteBoardAction(ActorName + placed + (left ? " слева" : " справа"));
-            if (Domino.Rack(ActiveSide).Count == 0) Finish(Actor, "Все костяшки выложены");
+            CompleteBoardAction(ActorName + placed + (left ? " слева" : " справа"), ActorNameEnglish + placed + (left ? " on the left" : " on the right"));
+            if (Domino.Rack(ActiveSide).Count == 0) Finish(Actor, "Все костяшки выложены", "All tiles played");
             else if (!FinishBlockedDomino() && Remaining == 0) EndTurn();
             return true;
         }
@@ -298,7 +330,7 @@ namespace ChessCards
         public bool DrawDomino()
         {
             if (Domino == null || Phase != MatchPhase.MovePieces || !Domino.Draw(ActiveSide)) return false;
-            SetMessage(ActorName + "добор костяшки из базара.");
+            SetMessage(ActorName + "добор костяшки из базара.", ActorNameEnglish + "drew from the boneyard.");
             FinishBlockedDomino();
             return true;
         }
@@ -307,7 +339,7 @@ namespace ChessCards
         {
             if (Domino == null || Phase != MatchPhase.MovePieces || Domino.StockCount > 0 || Domino.HasPlacement(ActiveSide)) return false;
             if (FinishBlockedDomino()) return true;
-            SetMessage(ActorName + "нет подходящей костяшки. Пас.");
+            SetMessage(ActorName + "нет подходящей костяшки. Пас.", ActorNameEnglish + "no matching tile. Pass.");
             SkipPending = false;
             EndTurn();
             return true;
@@ -319,22 +351,23 @@ namespace ChessCards
             int player = Domino.PipTotal(HumanSide);
             int opponent = Domino.PipTotal(ChessPosition.Other(HumanSide));
             int winner = player == opponent ? -1 : player < opponent ? 0 : 1;
-            Finish(winner, "Рыба. Очки на руках: " + player + " у тебя, " + opponent + " у бота");
+            Finish(winner, "Рыба. Очки на руках: " + player + " у тебя, " + opponent + " у бота",
+                "Blocked game. Pips left: " + player + " for you, " + opponent + " for the bot");
             return true;
         }
 
-        void CompleteBoardAction(string message)
+        void CompleteBoardAction(string russian, string english)
         {
             MovesPlayed++;
             Remaining--;
-            SetMessage(message + ". Осталось ходов: " + Remaining + ".");
+            SetMessage(russian + ". Осталось ходов: " + Remaining + ".", english + ". Moves left: " + Remaining + ".");
         }
 
         void EndTurn()
         {
             bool repeat = SkipPending && !InCheck(ChessPosition.Other(ActiveSide));
             SkipPending = false; Remaining = 0; Turn++;
-            if (repeat) SetMessage("Противник пропускает очередь. Разыграй следующую карту.");
+            if (repeat) SetMessage("Противник пропускает очередь. Разыграй следующую карту.", "The opponent skips their turn. Play another card.");
             else Actor = 1 - Actor;
             Phase = MatchPhase.ChooseCard; CheckStart();
         }
@@ -343,18 +376,23 @@ namespace ChessCards
             if (Phase == MatchPhase.Finished || Board == null) return;
             if (Board.LegalMoves(ActiveSide).Count == 0)
             {
-                if (Mode == GameMode.Checkers) Finish(1 - Actor, "Нет шашек или допустимых ходов");
-                else Finish(Board.InCheck(ActiveSide) ? 1 - Actor : -1, Board.InCheck(ActiveSide) ? "Мат" : "Пат");
+                if (Mode == GameMode.Checkers) Finish(1 - Actor, "Нет шашек или допустимых ходов", "No pieces or legal moves");
+                else
+                {
+                    bool check = Board.InCheck(ActiveSide);
+                    Finish(check ? 1 - Actor : -1, check ? "Мат" : "Пат", check ? "Checkmate" : "Stalemate");
+                }
             }
         }
-        void Finish(int winner, string reason)
+        void Finish(int winner, string reason, string reasonEnglish)
         {
             Phase = MatchPhase.Finished; Winner = winner; Remaining = 0; SkipPending = false;
             Result = winner == 0 ? "Победа! " + reason + "." : winner == 1 ? "Победа бота. " + reason + "." : "Ничья. " + reason + ".";
-            SetMessage(Result);
+            englishResult = (winner == 0 ? "You win! " : winner == 1 ? "The bot wins. " : "Draw. ") + reasonEnglish + ".";
+            SetMessage(Result, englishResult);
         }
         public void Resign()
-        { if (Phase != MatchPhase.Finished) Finish(1 - Actor, "Сдача"); }
+        { if (Phase != MatchPhase.Finished) Finish(1 - Actor, "Сдача", "Resignation"); }
         public ChessPosition UndoPreview() { return history.Count == 0 ? null : history.Peek().Board?.Clone(); }
     }
 

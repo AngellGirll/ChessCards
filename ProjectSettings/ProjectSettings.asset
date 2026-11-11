@@ -12,6 +12,8 @@ PlayerSettings:
   defaultScreenHeight: 720
   defaultScreenWidthWeb: 1280
   defaultScreenHeightWeb: 720
+  webGLTemplate: PROJECT:RoyalCourtyard
+  webGLDecompressionFallback: 1
   defaultIsNativeResolution: 0
   defaultInterfaceOrientation: 4
   allowedAutorotateToPortrait: 1

@@ -11,7 +11,24 @@ using ChessCards;
 
 namespace UnityEngine
 {
-    public class MonoBehaviour {}
+    public class MonoBehaviour
+    {
+        public GameObject gameObject = new GameObject();
+        protected static T FindAnyObjectByType<T>() where T : class { return null; }
+    }
+    public class GameObject { public T AddComponent<T>() where T : new() { return new T(); } }
+    public class AudioListener {}
+    public class AudioClip {}
+    public class AudioSource
+    {
+        public AudioClip clip;
+        public float volume;
+        public bool loop, playOnAwake, isPlaying;
+        public int oneShots;
+        public void Play() { isPlaying = true; }
+        public void Stop() { isPlaying = false; }
+        public void PlayOneShot(AudioClip sound) { oneShots++; }
+    }
     public struct Vector2 { public float x,y; public Vector2(float x,float y){this.x=x;this.y=y;} }
     public struct Vector3 { public float x,y,z; public Vector3(float x,float y,float z){this.x=x;this.y=y;this.z=z;} }
     public struct Quaternion { public static Quaternion identity=new Quaternion(); }
@@ -31,9 +48,24 @@ namespace UnityEngine
     }
     public enum TextAnchor {MiddleLeft,MiddleCenter,UpperLeft}
     public enum FontStyle {Normal,Bold}
-    public enum ScaleMode {StretchToFill,ScaleToFit}
+    public enum ScaleMode {StretchToFill,ScaleToFit,ScaleAndCrop}
     public class Font {}
-    public class Texture2D { public string Path; public static Texture2D whiteTexture = new Texture2D(); }
+    public enum TextureFormat { RGBA32 }
+    public enum FilterMode { Bilinear }
+    public enum TextureWrapMode { Clamp }
+    public class Texture2D
+    {
+        public string Path;
+        public int width = 1, height = 1;
+        public FilterMode filterMode;
+        public TextureWrapMode wrapMode;
+        public Color[] Colors;
+        public Texture2D() {}
+        public Texture2D(int w, int h, TextureFormat format, bool mipmaps) { width = w; height = h; }
+        public void SetPixels(Color[] colors) { Colors = colors; }
+        public void Apply(bool updateMipmaps, bool makeNoLongerReadable) {}
+        public static Texture2D whiteTexture = new Texture2D();
+    }
     public class GUIContent
     {
         public string text,tooltip;
@@ -67,6 +99,13 @@ namespace UnityEngine
     {
         static JsonSerializerOptions options=new JsonSerializerOptions{IncludeFields=true};
         public static T FromJson<T>(string s){return JsonSerializer.Deserialize<T>(s,options);}
+        public static void FromJsonOverwrite(string json, object target)
+        {
+            using var doc = JsonDocument.Parse(json);
+            foreach (var field in target.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public))
+                if (doc.RootElement.TryGetProperty(field.Name, out var value))
+                    field.SetValue(target, JsonSerializer.Deserialize(value.GetRawText(), field.FieldType, options));
+        }
         public static string ToJson(object o){return JsonSerializer.Serialize(o,options);}
     }
     public static class Resources
@@ -74,8 +113,12 @@ namespace UnityEngine
         public static T Load<T>(string name) where T:class
         {
             if(typeof(T)==typeof(Font))return new Font() as T;
-            string p=System.IO.Path.GetFullPath("Assets/ChessCards/Resources/"+name+".png");
-            return File.Exists(p)?new Texture2D{Path=p} as T:null;
+            string basePath=System.IO.Path.GetFullPath("Assets/ChessCards/Resources/"+name);
+            if(typeof(T)==typeof(AudioClip))return File.Exists(basePath+".ogg")?new AudioClip() as T:null;
+            string jpg=basePath+".jpg";
+            if(File.Exists(jpg))return new Texture2D{Path=jpg,width=1360,height=765} as T;
+            string png=basePath+".png";
+            return File.Exists(png)?new Texture2D{Path=png} as T:null;
         }
     }
     public class ExitGuiException:Exception{}
@@ -98,12 +141,41 @@ namespace UnityEngine
             bool hit=enabled&&click&&cx>=r.x+ox&&cy>=r.y+oy&&cx<=r.x+ox+r.width&&cy<=r.y+oy+r.height;
             if(hit)click=false;return hit;
         }
+        public static void DrawTexture(Rect r,Texture2D texture,ScaleMode mode,bool alphaBlend,float aspect,Color tint,float border,float radius)
+        {
+            string fill = tint.Css();
+            if (texture.Colors != null)
+            {
+                string id = "gradient" + (clip++);
+                svg.Append("<defs><linearGradient id='" + id + "' x2='0%' y2='100%'><stop offset='0%' stop-color='" +
+                    texture.Colors[^1].Css() + "'/><stop offset='100%' stop-color='" + texture.Colors[0].Css() +
+                    "'/></linearGradient></defs>");
+                fill = "url(#" + id + ")";
+            }
+            svg.Append("<rect x='" + (r.x+ox) + "' y='" + (r.y+oy) + "' width='" + r.width + "' height='" +
+                r.height + "' rx='" + radius + "' fill='" + fill + "' opacity='" + tint.a + "'/>");
+        }
+        public static void DrawTextureWithTexCoords(Rect r, Texture2D texture, Rect uv)
+        {
+            BeginGroup(r);
+            float width = r.width / uv.width, height = r.height / uv.height;
+            DrawTexture(new Rect(-uv.x * width, -(1 - uv.y - uv.height) * height, width, height), texture);
+            EndGroup();
+        }
+        static readonly Dictionary<string,string> textureData = new Dictionary<string,string>();
         public static void DrawTexture(Rect r,Texture2D texture,ScaleMode mode=ScaleMode.StretchToFill)
         {
             if(texture.Path==null) svg.Append("<rect x='"+(r.x+ox)+"' y='"+(r.y+oy)+"' width='"+r.width+"' height='"+r.height+"' fill='"+color.Css()+"' opacity='"+color.a+"'/>");
             else
             {
-                string image="<image x='"+(r.x+ox)+"' y='"+(r.y+oy)+"' width='"+r.width+"' height='"+r.height+"' href='data:image/png;base64,"+Convert.ToBase64String(File.ReadAllBytes(texture.Path))+"'/>";
+                if (!textureData.TryGetValue(texture.Path,out string data))
+                {
+                    string mime = texture.Path.EndsWith(".jpg") ? "jpeg" : "png";
+                    data = "data:image/" + mime + ";base64," + Convert.ToBase64String(File.ReadAllBytes(texture.Path));
+                    textureData.Add(texture.Path,data);
+                }
+                string fit = mode == ScaleMode.ScaleAndCrop ? "xMidYMid slice" : mode == ScaleMode.ScaleToFit ? "xMidYMid meet" : "none";
+                string image="<image x='"+(r.x+ox)+"' y='"+(r.y+oy)+"' width='"+r.width+"' height='"+r.height+"' preserveAspectRatio='"+fit+"' href='"+data+"'/>";
                 if(System.IO.Path.GetFileName(texture.Path)=="Body.png")
                 {
                     string id="mask"+(clip++);
@@ -299,6 +371,91 @@ static class UiSmoke
         Draw(app,"Validation/Previews/domino-landscape.svg");
         Console.WriteLine("PASS Go and domino selection, Go intersection and pass, domino rack and chain controls");
     }
+    static void LandscapeGameplay()
+    {
+        UnityEngine.Screen.width = 1280; UnityEngine.Screen.height = 720;
+        var app = new ChessCardsApp(); Call(app, "Awake");
+        UnityEngine.GUI.Click(350, 680); Draw(app, "Validation/Previews/transition.svg");
+        Check((bool)Get(app, "modeSelection"), "Landscape Play opens mode selector");
+        UnityEngine.GUI.Click(855, 430); Draw(app, "Validation/Previews/transition.svg");
+        var match = (CardMatch)Get(app, "match");
+        Check(match.Mode == GameMode.Domino && !(bool)Get(app, "portrait"), "Landscape mode choice");
+        match.Hands[0].Clear();
+        match.Hands[0].Add(new Card(match.Top.Color, 1));
+        UnityEngine.GUI.Click(665, 390); Draw(app, "Validation/Previews/transition.svg");
+        Check(match.Phase == MatchPhase.MovePieces, "Landscape card hitbox");
+        UnityEngine.GUI.Click(95, 565); Draw(app, "Validation/Previews/transition.svg");
+        Check((int)Get(app, "selected") == 0, "Landscape rack hitbox");
+        UnityEngine.GUI.Click(174, 443); Draw(app, "Validation/Previews/transition.svg");
+        Check(match.Domino.Chain.Count == 1, "Landscape domino placement");
+        Console.WriteLine("PASS horizontal play, mode selection, card input and board actions");
+    }
+
+    static void SettingsSmoke()
+    {
+        UnityEngine.Screen.width = 720; UnityEngine.Screen.height = 1280;
+        var app = new ChessCardsApp(); Call(app, "Awake");
+        var prefs = (GamePreferences)Get(app, "preferences");
+        Check(prefs.Language == GameLanguage.Russian && prefs.Difficulty == BotDifficulty.Normal &&
+            prefs.Selection == ModeSelection.Manual && prefs.Music > 0, "Settings defaults");
+        Check(!((UnityEngine.AudioSource)Get(app, "musicSource")).isPlaying, "Music should wait for input");
+
+        UnityEngine.GUI.Click(650, 50); Draw(app, "Validation/Previews/transition.svg");
+        Check((bool)Get(app, "settingsOpen") && ((UnityEngine.AudioSource)Get(app, "musicSource")).isPlaying,
+            "Settings button and first audio gesture");
+        UnityEngine.GUI.Click(530, 430); Draw(app, "Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(550, 515); Draw(app, "Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(530, 605); Draw(app, "Validation/Previews/transition.svg");
+        for (int i = 0; i < 4; i++)
+        {
+            UnityEngine.GUI.Click(85, 710); Draw(app, "Validation/Previews/transition.svg");
+        }
+        UnityEngine.GUI.Click(190, 795); Draw(app, "Validation/Previews/settings-portrait.svg");
+        Check(prefs.Language == GameLanguage.English && prefs.Difficulty == BotDifficulty.Hard &&
+            prefs.Selection == ModeSelection.Random, "Language, bot and random options respond to clicks");
+        Check(prefs.Music == 0 && Math.Abs(prefs.Effects - .2f) < .01f &&
+            !((UnityEngine.AudioSource)Get(app, "musicSource")).isPlaying &&
+            Math.Abs(((UnityEngine.AudioSource)Get(app, "effectsSource")).volume - .2f) < .01f, "Music mute and effects volume");
+        Check(File.ReadAllText("Validation/Previews/settings-portrait.svg").Contains(">Settings<"), "Language applies without restart");
+        UnityEngine.GUI.Click(340, 950); Draw(app, "Validation/Previews/transition.svg");
+        Check(!(bool)Get(app, "settingsOpen"), "Settings Done closes the overlay");
+
+        var reloaded = new ChessCardsApp(); Call(reloaded, "Awake");
+        prefs = (GamePreferences)Get(reloaded, "preferences");
+        Check(prefs.Language == GameLanguage.English && prefs.Difficulty == BotDifficulty.Hard &&
+            prefs.Selection == ModeSelection.Random && prefs.Music == 0 &&
+            Math.Abs(prefs.Effects - .2f) < .01f, "All settings reload");
+
+        UnityEngine.GUI.Click(150, 1160); Draw(reloaded, "Validation/Previews/transition.svg");
+        var match = (CardMatch)Get(reloaded, "match");
+        Check(match != null && !(bool)Get(reloaded, "modeSelection") && !(bool)Get(reloaded, "location"),
+            "Random mode starts directly");
+        Check(((ChessBot)Get(reloaded, "bot")).Difficulty == BotDifficulty.Hard, "Selected difficulty reaches actual bot");
+        match.Hands[0].Clear();
+        match.Hands[0].Add(new Card(match.Top.Color, 1));
+        Draw(reloaded, "Validation/Previews/card-english.svg");
+        Check(File.ReadAllText("Validation/Previews/card-english.svg").Contains(">MOVE<"), "Card face caption is localized");
+
+
+        Set(reloaded, "historyOpen", true); Draw(reloaded, "Validation/Previews/history-english.svg");
+        Check(File.ReadAllText("Validation/Previews/history-english.svg").Contains("Choose a card of the same color or value."),
+            "Current game history is localized");
+        Set(reloaded, "historyOpen", false);
+        Set(reloaded, "rules", true); Draw(reloaded, "Validation/Previews/rules-english.svg");
+        string rules = File.ReadAllText("Validation/Previews/rules-english.svg");
+        Check(rules.Contains("How to play") && !rules.Contains("ЦЕЛЬ"), "English rules");
+        Set(reloaded, "rules", false);
+        match.Resign();
+        Call(reloaded, "Update");
+        UnityEngine.GUI.Click(550, 1220); Draw(reloaded, "Validation/Previews/transition.svg");
+        Check(!ReferenceEquals(match, Get(reloaded, "match")) && !(bool)Get(reloaded, "modeSelection"),
+            "Random replay starts a fresh game directly");
+        UnityEngine.Screen.width = 1280; UnityEngine.Screen.height = 720;
+        UnityEngine.GUI.Click(1190, 50); Draw(reloaded, "Validation/Previews/settings-landscape.svg");
+        Check((bool)Get(reloaded, "settingsOpen"), "Landscape settings open from a game");
+        Console.WriteLine("PASS settings input, two languages, audio levels, difficulty, random start/replay and persistence");
+    }
+
     static void Main()
     {
         Directory.CreateDirectory("Validation/Previews");
@@ -342,6 +499,8 @@ static class UiSmoke
         Check(saved.Coins==40&&saved.Bench&&saved.Wins==1,"Progress save/reload failed");
         CheckersModeSmoke();
         GoDominoModeSmoke();
+        LandscapeGameplay();
+        SettingsSmoke();
         Console.WriteLine("PASS runtime source compilation against isolated adapter; GUI clicks, card selection, board input, mate reward, repair and save/reload");
         Console.WriteLine("Layout previews emitted. This does not replace testing in Unity Editor or a device build.");
     }

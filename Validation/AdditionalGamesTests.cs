@@ -160,12 +160,37 @@ static class AdditionalGamesTests
         Check(stockDraws > 0 && emptyRack > 0 && blocked > 0, "Domino test seeds cover both endings and stock draws");
     }
 
+    static void DifficultyAndLanguages()
+    {
+        var prefs = new GamePreferences { Music = float.NaN, Effects = 2, Difficulty = (BotDifficulty)99 };
+        prefs.Normalize();
+        Check(prefs.Music == .35f && prefs.Effects == 1f && prefs.Difficulty == BotDifficulty.Normal, "Normalize saved preferences");
+        var modes = new System.Collections.Generic.HashSet<GameMode>();
+        var random = new Random(82);
+        for (int i = 0; i < 64; i++) modes.Add(prefs.DrawMode(random));
+        Check(modes.Count == 4, "Random samples from all four game modes");
+
+        foreach (GameMode mode in modes)
+        foreach (BotDifficulty difficulty in new[] { BotDifficulty.Easy, BotDifficulty.Hard })
+        {
+            var match = new CardMatch(46, mode: mode);
+            var bot = new ChessBot(71, difficulty);
+            GiveCard(match, new Card(match.Top.Color, 2));
+            Check(bot.PlayBoardAction(match) && match.MovesPlayed == 1, mode + " " + difficulty + " plays a legal action");
+            Check(match.GetLog(true).Count == match.Log.Count && match.GetMessage(true).StartsWith("You: "),
+                "Move and history are available in English");
+            match.Resign();
+            Check(match.GetResult(true).Contains("Resignation") && match.Result.Contains("Сдача"), "Result available in both languages");
+        }
+    }
+
     public static int Run()
     {
         GoRules();
         GoScoring();
         DominoRules();
         CompleteMatches();
+        DifficultyAndLanguages();
         Console.WriteLine("PASS Go capture, suicide, ko, scoring and undo; domino draw, undo, swap and scoring; 16 completed new-mode bot matches");
         return checks;
     }

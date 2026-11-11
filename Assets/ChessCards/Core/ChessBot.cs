@@ -8,10 +8,18 @@ namespace ChessCards
     {
         readonly Random random;
         static readonly int[] Values = { 0, 100, 320, 330, 500, 900, 20000, 100, 320 };
-        public ChessBot(int seed) { random = new Random(seed); }
+        public BotDifficulty Difficulty { get; }
+
+        public ChessBot(int seed, BotDifficulty difficulty = BotDifficulty.Normal)
+        {
+            random = new Random(seed);
+            Difficulty = difficulty;
+        }
         public int ChooseCard(CardMatch match)
         {
             var playable = match.PlayableCards();
+            if (Difficulty == BotDifficulty.Easy)
+                return playable.Count == 0 ? -1 : playable[random.Next(playable.Count)];
             int best = -1; double bestScore = double.NegativeInfinity;
             Side side = match.ActiveSide;
             foreach (int index in playable)
@@ -41,7 +49,7 @@ namespace ChessCards
             Side side = match.ActiveSide;
             if (match.Go != null)
             {
-                int point = match.Go.ChoosePoint(side, random);
+                int point = match.Go.ChoosePoint(side, random, Difficulty);
                 return point < 0 ? match.PassGo() : match.PlaceStone(point);
             }
             if (match.Domino == null) return match.Move(ChooseMove(match));
@@ -65,7 +73,18 @@ namespace ChessCards
                     {
                         if (i != j && rack[j].Matches(openEnd)) support++;
                     }
-                    double score = tile.Pips * 2 + support * 3 + random.NextDouble();
+                    double score = Difficulty == BotDifficulty.Easy ? random.NextDouble() : tile.Pips * 2 + support * 3 + random.NextDouble();
+                    if (Difficulty == BotDifficulty.Hard)
+                    {
+                        int exposed = 0;
+                        foreach (DominoTile played in domino.Chain)
+                        {
+                            if (played.Left == openEnd) exposed++;
+                            if (played.Right == openEnd) exposed++;
+                        }
+                        // A number already seen often is harder for the other player to match.
+                        score += (exposed + support) * (domino.StockCount == 0 ? 4 : 2);
+                    }
                     if (score <= bestScore) continue;
                     bestIndex = i;
                     bestLeft = left;
@@ -81,6 +100,7 @@ namespace ChessCards
             Side side = match.ActiveSide;
             var legal = match.Board.LegalMoves(side);
             if (legal.Count == 0) throw new InvalidOperationException("No legal bot move.");
+            if (Difficulty == BotDifficulty.Easy) return legal[random.Next(legal.Count)];
             ChessMove best = legal[0]; double bestScore = double.NegativeInfinity;
             foreach (ChessMove move in legal)
             {
@@ -94,14 +114,7 @@ namespace ChessCards
                 double score = Evaluate(next, side);
                 if (continuations.Count > 0)
                 {
-                    double bound = following == side ? double.NegativeInfinity : double.PositiveInfinity;
-                    foreach (var reply in continuations)
-                    {
-                        var end = next.Clone(); end.ApplyUnchecked(reply);
-                        double value = Evaluate(end, side);
-                        if (following == side) bound = Math.Max(bound, value); else bound = Math.Min(bound, value);
-                    }
-                    score = bound;
+                    score = ReplyValue(next, continuations, following, side, enemy, match.Remaining);
                 }
                 else if (!check && following == enemy) score = 0; // Stalemate.
                 score += random.NextDouble() * 10;
@@ -109,6 +122,54 @@ namespace ChessCards
             }
             return best;
         }
+        double ReplyValue(ChessPosition board, List<ChessMove> replies, Side actor, Side perspective, Side enemy, int remaining)
+        {
+            bool maximize = actor == perspective;
+            double bound = maximize ? double.NegativeInfinity : double.PositiveInfinity;
+            // Keep the extra tactical pass bounded for mobile and browser builds.
+            var candidates = Difficulty == BotDifficulty.Hard ? new List<(ChessPosition Board, int Score)>() : null;
+            foreach (ChessMove reply in replies)
+            {
+                var next = board.Clone();
+                next.ApplyUnchecked(reply);
+                int value = Evaluate(next, perspective);
+                if (candidates != null) candidates.Add((next, value));
+                else bound = maximize ? Math.Max(bound, value) : Math.Min(bound, value);
+            }
+
+            if (candidates == null) return bound;
+            candidates.Sort((first, second) => maximize ? second.Score.CompareTo(first.Score) : first.Score.CompareTo(second.Score));
+            for (int i = 0; i < Math.Min(4, candidates.Count); i++)
+            {
+                var candidate = candidates[i];
+                bool stays = candidate.Board.ForcedCaptureFrom >= 0 ||
+                    (actor == perspective && remaining > 2 && !candidate.Board.InCheck(enemy));
+                Side third = stays ? actor : ChessPosition.Other(actor);
+                double value = candidate.Score + .75 * TacticalSwing(candidate.Board, third, perspective);
+                bound = maximize ? Math.Max(bound, value) : Math.Min(bound, value);
+            }
+            return bound;
+        }
+
+        static int TacticalSwing(ChessPosition board, Side actor, Side perspective)
+        {
+            int swing = 0;
+            foreach (ChessMove move in board.LegalMoves(actor))
+            {
+                Piece victim = board.Squares[move.To];
+                int gain = victim.Type == PieceType.None ? 0 : Values[(int)victim.Type];
+                if (board.Mode == GameMode.Checkers)
+                {
+                    int captured = CheckersRules.CapturedSquare(board, move);
+                    gain = captured >= 0 ? Values[(int)board.Squares[captured].Type] : 0;
+                }
+                if (move.Promotion != PieceType.None)
+                    gain += Values[(int)move.Promotion] - Values[(int)board.Squares[move.From].Type];
+                swing = Math.Max(swing, gain);
+            }
+            return actor == perspective ? swing : -swing;
+        }
+
         public static int Evaluate(ChessPosition board, Side perspective)
         {
             int result = 0;

@@ -19,9 +19,9 @@ for name in required:
     assert (root / name).is_file(), 'Missing: ' + name
 
 version = (root / 'ProjectSettings/ProjectVersion.txt').read_text()
-assert 'm_EditorVersion: 6000.6.8f1' in version
+assert re.search(r'^m_EditorVersion: 6000\.\d+\.\d+f\d+$', version, re.M)
 manifest = json.loads((root / 'Packages/manifest.json').read_text())
-for module in ['imgui', 'jsonserialize', 'ui']:
+for module in ['audio', 'imgui', 'jsonserialize', 'ui']:
     assert manifest['dependencies']['com.unity.modules.' + module] == '1.0.0'
 settings = (root / 'ProjectSettings/ProjectSettings.asset').read_text()
 assert re.search(r'^  activeInputHandler: 0$', settings, re.M)
@@ -53,10 +53,17 @@ assert 'm_Name: Chess Cards Prototype' in scene_text
 build = (root / 'ProjectSettings/EditorBuildSettings.asset').read_text()
 scene_guid = re.search(r'^guid: (\w+)', scene.with_name(scene.name + '.meta').read_text(), re.M)[1]
 assert 'path: Assets/ChessCards/Scenes/Main.unity' in build and 'guid: ' + scene_guid in build
+assert re.search(r'^  webGLTemplate: PROJECT:RoyalCourtyard$', settings, re.M)
+template = assets / 'WebGLTemplates/RoyalCourtyard/index.html'
+assert template.is_file() and 'createUnityInstance' in template.read_text()
 resources = assets / 'ChessCards/Resources/ChessCards'
 for side in ['White', 'Black']:
     for piece in ['King', 'Queen', 'Rook', 'Bishop', 'Knight', 'Pawn']:
         assert (resources / (side + piece + '.png')).is_file()
+for asset in ['Courtyard.jpg', 'RestoredCourtyard.jpg', 'GameRoom.jpg', 'Chess.png', 'ChessPieces.png', 'Checkers.png', 'Go.png',
+              'Domino.png', 'Bench.png', 'Lantern.png', 'Cottage.png', 'Coin.png',
+              'CourtyardMusic.ogg', 'Click.ogg', 'Move.ogg', 'Win.ogg']:
+    assert (resources / 'Royal' / asset).is_file(), 'Missing presentation asset: ' + asset
 assert (resources / 'UI.ttf').is_file()
 assert (resources / 'FONT_LICENSE.txt').is_file()
 print('PASS Unity project structure, entry scene, object/GUID references, input, modules and metadata (' + str(len(guids)) + ' assets/folders)')

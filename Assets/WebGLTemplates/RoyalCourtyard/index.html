@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#200d31">
+  <title>ChessCards</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; color: #fff5e5; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center;
+      padding-bottom: 44px; overflow: hidden; background: radial-gradient(ellipse at 50% 30%, #532278, #200d31 72%);
+    }
+    main { position: relative; width: min(100vw, calc((100vh - 44px) * 1.7778)); width: min(100vw, calc((100dvh - 44px) * 1.7778)); aspect-ratio: 16 / 9; }
+    canvas { display: block; width: 100%; height: 100%; background: #200d31; touch-action: none; }
+    #loading { position: absolute; inset: 0; display: grid; place-content: center; gap: 1rem; text-align: center; padding: 1rem; }
+    #loading[hidden], button[hidden] { display: none; }
+    progress { width: min(56vw, 20rem); accent-color: #ffbb48; justify-self: center; }
+    button {
+      position: absolute; right: .65rem; top: calc(100% + .3rem); min-width: 2.2rem; min-height: 2.2rem;
+      border: 2px solid #f5b543; border-radius: .65rem; color: inherit; background: #421d64; cursor: pointer;
+    }
+    button:focus-visible { outline: 3px solid #fff0a8; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <main aria-label="ChessCards">
+    <canvas id="game" width="{{{ WIDTH }}}" height="{{{ HEIGHT }}}" tabindex="0"></canvas>
+    <div id="loading" role="status"><strong>ChessCards</strong><progress id="progress" aria-label="Загрузка / Loading" max="1" value="0"></progress><span id="message"></span></div>
+    <button id="fullscreen" type="button" aria-label="Полный экран / Full screen" title="Полный экран / Full screen" hidden>⛶</button>
+  </main>
+  <script>
+    const canvas = document.getElementById('game');
+    const loading = document.getElementById('loading');
+    const progress = document.getElementById('progress');
+    const fullscreen = document.getElementById('fullscreen');
+    const build = 'Build/';
+    const config = {
+      dataUrl: build + '{{{ DATA_FILENAME }}}',
+      frameworkUrl: build + '{{{ FRAMEWORK_FILENAME }}}',
+      codeUrl: build + '{{{ CODE_FILENAME }}}',
+      streamingAssetsUrl: 'StreamingAssets',
+      companyName: '{{{ COMPANY_NAME }}}',
+      productName: '{{{ PRODUCT_NAME }}}',
+      productVersion: '{{{ PRODUCT_VERSION }}}',
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2)
+    };
+
+    function showFailure() {
+      progress.hidden = true;
+      document.getElementById('message').textContent = 'Не удалось запустить игру. Обнови страницу. / Could not start the game. Refresh the page.';
+    }
+
+    const loader = document.createElement('script');
+    loader.src = build + '{{{ LOADER_FILENAME }}}';
+    loader.onerror = showFailure;
+    loader.onload = () => {
+      createUnityInstance(canvas, config, value => { progress.value = value; })
+        .then(instance => {
+          loading.hidden = true;
+          fullscreen.hidden = !document.fullscreenEnabled;
+          fullscreen.addEventListener('click', () => instance.SetFullscreen(1));
+        })
+        .catch(showFailure);
+    };
+    document.body.appendChild(loader);
+  </script>
+</body>
+</html>
