@@ -1,0 +1,7 @@
+{
+  "name": "ChessCards.Runtime",
+  "rootNamespace": "ChessCards",
+  "references": [
+    "ChessCards.Core"
+  ]
+}

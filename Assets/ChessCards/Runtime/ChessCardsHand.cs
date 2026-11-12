@@ -6,7 +6,7 @@ namespace ChessCards
 {
     public sealed partial class ChessCardsApp
     {
-        const float HandLift = 17;
+        float HandLift { get { return Math.Max(0, Math.Min(18, ActiveTheme?.HandLift ?? 17)); } }
         readonly List<Rect> handSlots = new List<Rect>();
         float[] handLifts = new float[8];
         int selectedHandCard = -1, frontHandCard = -1;
@@ -26,10 +26,11 @@ namespace ChessCards
             float cardHeight = rows == 1 ? 148 : area.height / rows + 24;
             float cardWidth = cardHeight / 1.4f;
             float rowStep = rows == 1 ? 0 : (area.height - cardHeight) / (rows - 1);
+            float spacing = Math.Max(.55f, Math.Min(.95f, ActiveTheme?.HandSpacing ?? .82f));
             for (int first = 0; first < count; first += perRow)
             {
                 int columns = Math.Min(perRow, count - first);
-                float step = columns == 1 ? 0 : Math.Min(cardWidth * .82f, (area.width - cardWidth) / (columns - 1));
+                float step = columns == 1 ? 0 : Math.Min(cardWidth * spacing, (area.width - cardWidth) / (columns - 1));
                 float left = area.x + (area.width - cardWidth - (columns - 1) * step) / 2;
                 for (int column = 0; column < columns; column++)
                     handSlots.Add(new Rect(left + column * step, area.y + first / perRow * rowStep, cardWidth, cardHeight));

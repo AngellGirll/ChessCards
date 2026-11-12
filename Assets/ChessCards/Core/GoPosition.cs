@@ -130,7 +130,7 @@ namespace ChessCards
             return balance;
         }
 
-        internal bool AcceptPass(Side side)
+        public bool AcceptPass(Side side)
         {
             if (LastPass != ChessPosition.Other(side) || Occupied < 12) return false;
             CountAreas(out int black, out int white);

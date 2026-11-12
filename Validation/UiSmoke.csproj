@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems><Nullable>disable</Nullable></PropertyGroup>
-<ItemGroup><Compile Include="../Assets/ChessCards/Core/*.cs" /><Compile Include="../Assets/ChessCards/Runtime/*.cs" /><Compile Include="UiSmoke.cs" /></ItemGroup>
+<ItemGroup><ProjectReference Include="ChessCards.Core.csproj" /><Compile Include="../Assets/ChessCards/Runtime/*.cs" /><Compile Include="UiSmoke.cs" /></ItemGroup>
 </Project>

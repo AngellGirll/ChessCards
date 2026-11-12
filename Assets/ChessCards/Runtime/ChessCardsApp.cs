@@ -21,9 +21,9 @@ namespace ChessCards
         bool initialized, location = true, rules, confirmLeave, credited;
         int selected = -1;
         bool illegalGoMove;
-        const float BotTurnDelay = .85f;
-        const float BotMoveDelay = .8f;
-        const float BotCardPreviewDelay = 1.4f;
+        float BotTurnDelay { get { return balance != null ? Math.Max(0, balance.TurnDelay) : .85f; } }
+        float BotMoveDelay { get { return balance != null ? Math.Max(0, balance.MoveDelay) : .8f; } }
+        float BotCardPreviewDelay { get { return balance != null ? Math.Max(0, balance.CardRevealDelay) : 1.4f; } }
         float nextBot;
         int botTurn = -1, pendingBotCard = -1;
         bool historyOpen;
@@ -38,39 +38,29 @@ namespace ChessCards
         bool showLastResult;
         bool portrait;
         float w, h;
-        readonly Color background = Hex("200D31"), panel = Hex("492469"), ink = Hex("FFF9F2"), muted = Hex("F0D8FB"), gold = Hex("FFE098");
+        Color background = Hex("200D31"), panel = Hex("492469"), ink = Hex("FFF9F2"), muted = Hex("F0D8FB"), gold = Hex("FFE098");
         readonly Color[] cardColors = { Hex("E22E49"), Hex("315DE5"), Hex("24A322"), Hex("E79D23") };
         static Color Hex(string s) { return new Color(Convert.ToInt32(s.Substring(0, 2), 16) / 255f, Convert.ToInt32(s.Substring(2, 2), 16) / 255f, Convert.ToInt32(s.Substring(4, 2), 16) / 255f); }
         void Awake()
         {
+            if (!InitializeSceneFlow()) return;
             Application.targetFrameRate = 60;
-            font = Resources.Load<Font>("ChessCards/UI");
-            cardBody = Resources.Load<Texture2D>("ChessCards/Cards/Body");
-            cardFrame = Resources.Load<Texture2D>("ChessCards/Cards/Frame");
-            cardBack = Resources.Load<Texture2D>("ChessCards/Cards/Back");
-            string[] faces = { "1", "2", "3", "Swap", "Undo", "Skip" };
-            for (int i = 0; i < faces.Length; i++)
-                cardFaces[i] = Resources.Load<Texture2D>("ChessCards/Cards/Face" + faces[i]);
-            for (int side = 0; side < 2; side++) for (int kind = 1; kind <= 6; kind++)
-                pieces[side, kind] = Resources.Load<Texture2D>("ChessCards/" + (side == 0 ? "White" : "Black") + (PieceType)kind);
-            for (int side = 0; side < 2; side++)
-            {
-                pieces[side, (int)PieceType.Checker] = Resources.Load<Texture2D>("ChessCards/" + (side == 0 ? "White" : "Black") + "Checker");
-                pieces[side, (int)PieceType.CrownedChecker] = Resources.Load<Texture2D>("ChessCards/" + (side == 0 ? "White" : "Black") + "CrownedChecker");
-            }
             try { progress = JsonUtility.FromJson<RestorationProgress>(PlayerPrefs.GetString(SaveKey, "{}")); }
             catch (Exception) { progress = new RestorationProgress(); }
             if (progress == null) progress = new RestorationProgress();
             progress.Coins = Math.Max(0, progress.Coins); progress.Wins = Math.Max(0, progress.Wins);
             LoadPresentation();
+            StartScenePreview();
         }
         void Save() { PlayerPrefs.SetString(SaveKey, JsonUtility.ToJson(progress)); PlayerPrefs.Save(); }
-        void OnApplicationPause(bool paused) { if (paused) { Save(); SavePreferences(); } }
-        void OnApplicationQuit() { Save(); SavePreferences(); }
+        void OnApplicationPause(bool paused) { if (paused && progress != null) { Save(); SavePreferences(); } }
+        void OnApplicationQuit() { if (progress != null) { Save(); SavePreferences(); } }
         void StartMatch()
         {
             int seed = Environment.TickCount;
-            match = new CardMatch(seed, null, selectedMode); bot = new ChessBot(seed ^ 76543, preferences.Difficulty);
+            match = new CardMatch(seed, null, selectedMode, balance != null ? balance.StartingHand : 5,
+                balance != null ? balance.CopiesPerNumberAndColor : 4, balance != null ? balance.CopiesPerSpecialAndColor : 2);
+            bot = new ChessBot(seed ^ 76543, preferences.Difficulty);
             modeSelection = false;
             selected = -1; selectedMoves.Clear(); ResetHandSelection(); promotions = null; credited = false; location = false;
             botTurn = -1; pendingBotCard = -1; historyOpen = false;
@@ -78,10 +68,11 @@ namespace ChessCards
             illegalGoMove = false;
             lastRepair = -1; showLastResult = false;
             nextBot = Time.unscaledTime + BotTurnDelay;
+            OpenScene(matchScene);
         }
         void Update()
         {
-            if (location || match == null) return;
+            if (sceneTransition || location || match == null) return;
             CreditResult();
             if (match.Phase == MatchPhase.Finished || match.Phase == MatchPhase.GoScoring || match.Actor != 1)
             { botTurn = -1; pendingBotCard = -1; return; }
@@ -160,7 +151,7 @@ namespace ChessCards
             showLastResult = true;
             if (match.Winner == 0)
             {
-                progress.AwardWin();
+                progress.AwardWin(WinReward);
                 Save();
                 Feedback(winSound);
             }
@@ -192,11 +183,12 @@ namespace ChessCards
             float oy = Screen.height - safe.y - safe.height + (safe.height - h * scale) / 2;
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(new Vector3(ox, oy, 0), Quaternion.identity, new Vector3(scale, scale, 1));
-            bool blocked = settingsOpen || modeSelection || rules || historyOpen || confirmLeave || promotions != null;
+            bool blocked = sceneTransition || settingsOpen || modeSelection || rules || historyOpen || confirmLeave || promotions != null;
             if (!location) Backdrop(gameRoom, .63f);
             GUI.enabled = !blocked;
             if (location) DrawLocation(); else DrawMatch();
             GUI.enabled = true;
+            if (sceneTransition) { GUI.matrix = oldMatrix; return; }
             if (settingsOpen) DrawSettings();
             else if (modeSelection) DrawModeSelection();
             else if (rules) DrawRules();
@@ -258,63 +250,66 @@ namespace ChessCards
 
         void DrawMatch()
         {
-            if (match == null) { location = true; return; }
-            if (Button(new Rect(28, 22, 124, 52), T("Во двор", "Courtyard"), Royal, true, 18)) confirmLeave = true;
-            Banner(new Rect(167, 20, portrait ? 195 : 580, 55), ModeTitle(match.Mode) + (portrait ? "" : T(" × КАРТЫ", " × CARDS")), portrait ? 22 : 31);
-            if (Button(new Rect(w - 347, 22, 100, 52), T("История", "History"), Blue, true, 18)) historyOpen = true;
-            if (Button(new Rect(w - 236, 22, 100, 52), T("Правила", "Rules"), Blue, true, 18)) { rulesScroll = new Vector2(); rules = true; }
-            if (Button(new Rect(w - 125, 22, 97, 52), "⚙", Royal, true, 28)) settingsOpen = true;
-            Framed(new Rect(28, 90, w - 56, portrait ? 100 : 62), RoyalDeep, 14, 3);
+            if (match == null) { ReturnToCourtyard(); return; }
+            if (Button(Region(ScreenBlock.Back, new Rect(28, 22, 124, 52)), T("Во двор", "Courtyard"), Royal, true, 18)) confirmLeave = true;
+            Banner(Region(ScreenBlock.Title, new Rect(167, 20, portrait ? 195 : 580, 55)), ModeTitle(match.Mode) + (portrait ? "" : T(" × КАРТЫ", " × CARDS")), portrait ? 22 : 31);
+            if (Button(Region(ScreenBlock.History, new Rect(w - 347, 22, 100, 52)), T("История", "History"), Blue, true, 18)) historyOpen = true;
+            if (Button(Region(ScreenBlock.Rules, new Rect(w - 236, 22, 100, 52)), T("Правила", "Rules"), Blue, true, 18)) { rulesScroll = new Vector2(); rules = true; }
+            if (Button(Region(ScreenBlock.Settings, new Rect(w - 125, 22, 97, 52)), "⚙", Royal, true, 28)) settingsOpen = true;
+            Rect status = Region(ScreenBlock.MatchStatus, new Rect(28, 90, w - 56, portrait ? 100 : 62));
+            Framed(status, RoyalDeep, 14, 3);
             string side = match.HumanSide == Side.White ? T("белые", "White") : T("чёрные", "Black");
             string phase = MatchStatus();
-            Label(new Rect(42, 94, w - 84, portrait ? 48 : 30), phase, portrait ? 23 : 24, match.Actor == 0 ? gold : ink, false, true);
+            Label(new Rect(status.x + 14, status.y + 4, status.width - 28, status.height * .48f), phase, portrait ? 23 : 24, match.Actor == 0 ? gold : ink, false, true);
             string playerInfo = match.Domino == null ? T("Ты: ", "You: ") + side : T("Костяшек у бота: ", "Bot tiles: ") + match.Domino.Rack(match.SideFor(1)).Count;
-            Label(new Rect(42, portrait ? 140 : 124, w - 84, 34), playerInfo + T("  •  Очередь №", "  •  Turn #") + match.Turn + T("  •  Карт у бота: ", "  •  Bot cards: ") + match.Hands[1].Count, portrait ? 20 : 18, muted);
+            Label(new Rect(status.x + 14, status.y + status.height * .52f, status.width - 28, status.height * .43f), playerInfo + T("  •  Очередь №", "  •  Turn #") + match.Turn + T("  •  Карт у бота: ", "  •  Bot cards: ") + match.Hands[1].Count, portrait ? 20 : 18, muted);
             float size = portrait ? 560 : 496;
-            Rect board = new Rect(portrait ? 80 : 48, portrait ? 210 : 190, size, size);
+            Rect board = Region(ScreenBlock.Board, new Rect(portrait ? 80 : 48, portrait ? 210 : 190, size, size));
+            board.width = board.height = Math.Min(board.width, board.height);
             if (match.Go != null) DrawGoBoard(board);
             else if (match.Domino != null) DrawDominoBoard(board);
             else DrawBoard(board);
-            float right = portrait ? 32 : 590, top = portrait ? 802 : 180, width = portrait ? 656 : 650;
+            Rect cards = Region(ScreenBlock.Cards, new Rect(portrait ? 32 : 590, portrait ? 802 : 180, portrait ? 656 : 650, 321));
+            float right = cards.x, top = cards.y, width = cards.width;
             if (match.Phase == MatchPhase.GoScoring)
             {
                 DrawGoScoring(right, top, width);
                 return;
             }
             DrawCards(right, top, width);
-            float messageY = portrait ? 1126 : 508;
-            float messageHeight = match.Phase == MatchPhase.Finished && portrait ? 30 : portrait ? 64 : 70;
+            Rect messageArea = Region(ScreenBlock.Notice, new Rect(right, portrait ? 1126 : 508, width, portrait ? 64 : 70));
+            if (match.Phase == MatchPhase.Finished && portrait) messageArea.height = Math.Min(30, messageArea.height);
             bool announcing = !illegalGoMove && match.Phase != MatchPhase.Finished && Time.unscaledTime < cardAnnouncementUntil && announcedCard.HasValue;
             if (announcing)
             {
                 Card card = announcedCard.Value;
-                Framed(new Rect(right, messageY, width, messageHeight), cardColors[card.Color], 12, 2);
-                Label(new Rect(right + 12, messageY + 4, width - 24, messageHeight - 8), AnnouncementText(card), 20, ink);
+                Framed(messageArea, cardColors[card.Color], 12, 2);
+                Label(new Rect(messageArea.x + 12, messageArea.y + 4, messageArea.width - 24, messageArea.height - 8), AnnouncementText(card), 20, ink);
             }
             else
             {
-                Framed(new Rect(right, messageY, width, messageHeight), RoyalDeep, 10, 2);
+                Framed(messageArea, RoyalDeep, 10, 2);
                 string message = illegalGoMove ? T("Ход оставляет группу без свободных точек или повторяет позицию.", "This move leaves a group without liberties or repeats the position.") : match.GetMessage(English);
-                Label(new Rect(right + 12, messageY, width - 24, messageHeight), message, 19, ink);
+                Label(new Rect(messageArea.x + 12, messageArea.y, messageArea.width - 24, messageArea.height), message, 19, ink);
             }
-            float actionY = portrait ? 1200 : 650;
+            Rect actions = Region(ScreenBlock.Actions, new Rect(right, portrait ? 1200 : 650, width, 54));
             if (match.Phase == MatchPhase.Finished)
             {
-                Label(new Rect(right, portrait ? 1160 : 594, width, 32), match.Winner == 0 ? T("+100 монет уже зачислено", "+100 coins awarded") : T("Можно попробовать ещё раз", "Play another round"), 22, gold, true);
-                if (Button(new Rect(right, actionY, width * .56f, 54), T("Вернуться во двор", "Return to courtyard"), Hex("87643B"))) { location = true; GUIUtility.ExitGUI(); }
-                if (Button(new Rect(right + width * .59f, actionY, width * .41f, 54), T("Ещё партия", "Play again"))) { Replay(); GUIUtility.ExitGUI(); }
+                Label(new Rect(right, portrait ? 1160 : 594, width, 32), match.Winner == 0 ? "+" + WinReward + T(" монет зачислено", " coins awarded") : T("Можно попробовать ещё раз", "Play another round"), 22, gold, true);
+                if (Button(new Rect(actions.x, actions.y, actions.width * .56f, actions.height), T("Вернуться во двор", "Return to courtyard"), Hex("87643B"))) { ReturnToCourtyard(); GUIUtility.ExitGUI(); }
+                if (Button(new Rect(actions.x + actions.width * .59f, actions.y, actions.width * .41f, actions.height), T("Ещё партия", "Play again"))) { Replay(); GUIUtility.ExitGUI(); }
             }
             else
             {
                 bool canDraw = match.Actor == 0 && match.Phase == MatchPhase.ChooseCard && match.PlayableCards().Count == 0;
-                float drawWidth = match.Go == null ? width * .56f : width * .38f;
-                if (Button(new Rect(right, actionY, drawWidth, 54), T("Взять карту", "Draw a card"), Green, canDraw))
+                float drawWidth = match.Go == null ? actions.width * .56f : actions.width * .38f;
+                if (Button(new Rect(actions.x, actions.y, drawWidth, actions.height), T("Взять карту", "Draw a card"), Green, canDraw))
                 { match.Draw(); ResetHandSelection(); selected = -1; illegalGoMove = false; CreditResult(); GUIUtility.ExitGUI(); }
-                if (match.Go != null && Button(new Rect(right + width * .41f, actionY, width * .22f, 54), T("Пас", "Pass"), panel, match.Actor == 0))
+                if (match.Go != null && Button(new Rect(actions.x + actions.width * .41f, actions.y, actions.width * .22f, actions.height), T("Пас", "Pass"), panel, match.Actor == 0))
                 { match.PassGo(); ResetHandSelection(); illegalGoMove = false; cardAnnouncementUntil = 0; CreditResult(); GUIUtility.ExitGUI(); }
                 float deckStart = match.Go == null ? .59f : .65f;
-                Framed(new Rect(right + width * deckStart, actionY, width * (1 - deckStart), 54), Blue, 14, 3);
-                Label(new Rect(right + width * deckStart, actionY, width * (1 - deckStart), 54), T("Колода: ", "Deck: ") + match.DeckCount + T("\nСброс: ", "\nDiscard: ") + match.DiscardCount, 18, muted, true);
+                Framed(new Rect(actions.x + actions.width * deckStart, actions.y, actions.width * (1 - deckStart), actions.height), Blue, 14, 3);
+                Label(new Rect(actions.x + actions.width * deckStart, actions.y, actions.width * (1 - deckStart), actions.height), T("Колода: ", "Deck: ") + match.DeckCount + T("\nСброс: ", "\nDiscard: ") + match.DiscardCount, 18, muted, true);
             }
             if (!portrait && match.Phase != MatchPhase.Finished)
             {
@@ -333,15 +328,15 @@ namespace ChessCards
             Label(new Rect(x + 24, y + 122, width - 48, 84),
                 T("Нажми на камень в мёртвой группе, чтобы исключить всю группу из подсчёта. Повторное нажатие возвращает группу.", "Tap a dead group to exclude it from the score. Tap again to restore it."), 23, ink);
 
-            float buttonY = portrait ? 1200 : 650;
-            float buttonWidth = (width - 16) / 2;
-            if (Button(new Rect(x, buttonY, buttonWidth, 54), T("Продолжить игру", "Resume play"), panel))
+            Rect actions = Region(ScreenBlock.Actions, new Rect(x, portrait ? 1200 : 650, width, 54));
+            float buttonWidth = (actions.width - 16) / 2;
+            if (Button(new Rect(actions.x, actions.y, buttonWidth, actions.height), T("Продолжить игру", "Resume play"), panel))
             {
                 match.ResumeGo();
                 cardAnnouncementUntil = 0;
                 GUIUtility.ExitGUI();
             }
-            if (Button(new Rect(x + buttonWidth + 16, buttonY, buttonWidth, 54), T("Подтвердить счёт", "Confirm score"), Green))
+            if (Button(new Rect(actions.x + buttonWidth + 16, actions.y, buttonWidth, actions.height), T("Подтвердить счёт", "Confirm score"), Green))
             {
                 match.ConfirmGoScore();
                 CreditResult();
@@ -503,7 +498,7 @@ namespace ChessCards
                 int file = whiteBottom ? col : 7 - col, rank = whiteBottom ? 7 - row : row;
                 int square = rank * 8 + file;
                 Rect tile = new Rect(r.x + col * cell, r.y + row * cell, cell, cell);
-                Color c = (file + rank) % 2 == 0 ? Hex("31807C") : Hex("F9E6BB");
+                Color c = (file + rank) % 2 == 0 ? (ActiveTheme?.BoardDark ?? Hex("31807C")) : (ActiveTheme?.BoardLight ?? Hex("F9E6BB"));
                 if (match.LastMove.HasValue && (match.LastMove.Value.From == square || match.LastMove.Value.To == square)) c = (file + rank) % 2 == 0 ? Hex("A5AA61") : Hex("D7CB7C");
                 if (square == selected) c = Hex("E7B55A");
                 Piece p = board.Squares[square];
@@ -609,7 +604,7 @@ namespace ChessCards
             Label(new Rect(r.x + 24, r.y + 86, r.width - 48, 110), T("Текущая партия завершится без награды. Монеты и ремонт сохранятся.", "Leaving ends this game without a reward. Your coins and repairs are saved."), 24);
             if (Button(new Rect(r.x + 24, r.y + 232, (r.width - 64) / 2, 64), T("Остаться", "Stay"))) confirmLeave = false;
             if (Button(new Rect(r.x + 40 + (r.width - 64) / 2, r.y + 232, (r.width - 64) / 2, 64), T("Во двор", "Courtyard"), Hex("805246")))
-            { confirmLeave = false; location = true; promotions = null; }
+            { ReturnToCourtyard(); }
         }
         void DrawPromotion()
         {
@@ -644,7 +639,7 @@ namespace ChessCards
 
         void DrawModeChoice(Rect r, GameMode mode)
         {
-            if (Button(r, "", ModeColors[(int)mode]))
+            if (Button(r, "", modeColors[(int)mode]))
             { selectedMode = mode; StartMatch(); GUIUtility.ExitGUI(); }
             var icon = modeArt[(int)mode];
             if (icon != null)
@@ -659,17 +654,16 @@ namespace ChessCards
 
         void DrawModeSelection()
         {
-            Rect r = portrait ? new Rect(40, h / 2 - 300, w - 80, 600) : new Rect(200, 100, 880, 520);
+            Rect r = Region(ScreenBlock.ModePicker, portrait ? new Rect(40, h / 2 - 300, w - 80, 600) : new Rect(200, 100, 880, 520));
             Overlay(r, T("Выбери игру", "Choose a game"));
             if (Button(new Rect(r.x + r.width - 68, r.y + 13, 50, 49), "×", Red, true, 30))
             { modeSelection = false; GUIUtility.ExitGUI(); }
             float tileWidth = (r.width - 64) / 2;
             float tileHeight = portrait ? 166 : 148;
-            var modes = new[] { GameMode.Chess, GameMode.Checkers, GameMode.Go, GameMode.Domino };
-            for (int i = 0; i < modes.Length; i++)
+            for (int i = 0; i < enabledModes.Count; i++)
             {
                 var tile = new Rect(r.x + 24 + i % 2 * (tileWidth + 16), r.y + 100 + i / 2 * (tileHeight + 16), tileWidth, tileHeight);
-                DrawModeChoice(tile, modes[i]);
+                DrawModeChoice(tile, enabledModes[i]);
             }
             if (Button(new Rect(r.x + 24, r.y + r.height - 80, r.width - 48, 56), T("Назад", "Back"), Hex("87643B"))) modeSelection = false;
         }
@@ -724,6 +718,7 @@ namespace ChessCards
                     "КАРТЫ И БАЗАР\nНажми карту дважды: сначала для выбора, затем для розыгрыша. Карта даёт 1–3 выкладывания. Обмен меняет руки костяшек, отмена возвращает позицию до последнего выкладывания, пропуск даёт один ход и оставляет очередь у сыгравшего карту. Если подходящей костяшки нет, после розыгрыша карты бери из базара до подходящей. Добор костяшки не тратит ход карты. При пустом базаре пас передаёт очередь.\n\n" +
                     "ПОБЕДА\nПобеждает тот, кто первым выложил все костяшки. Если базар пуст и оба заблокированы, выигрывает тот, у кого на руках меньше точек. При равенстве ничья. Победа даёт 100 монет.";
             if (English) content = EnglishRules.For(mode);
+            content = content.Replace("100 монет", WinReward + " монет").Replace("100 coins", WinReward + " coins");
             GUIStyle ruleStyle = new GUIStyle(text) { fontSize = portrait ? 23 : 21, alignment = TextAnchor.UpperLeft };
             float contentHeight = ruleStyle.CalcHeight(new GUIContent(content), view.width - 36) + 20;
             rulesScroll = GUI.BeginScrollView(view, rulesScroll, new Rect(0, 0, view.width - 26, contentHeight));

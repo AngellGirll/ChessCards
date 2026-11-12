@@ -1,0 +1,5 @@
+{
+  "name": "ChessCards.Core",
+  "rootNamespace": "ChessCards",
+  "noEngineReferences": true
+}

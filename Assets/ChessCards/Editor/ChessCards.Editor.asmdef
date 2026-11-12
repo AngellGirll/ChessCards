@@ -1,0 +1,11 @@
+{
+  "name": "ChessCards.Editor",
+  "rootNamespace": "ChessCards",
+  "references": [
+    "ChessCards.Core",
+    "ChessCards.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}

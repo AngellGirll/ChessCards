@@ -1,36 +1,37 @@
 #if UNITY_EDITOR
-using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
-using UnityEngine;
-using ChessCards;
 
-public static class PrototypeSetup
+namespace ChessCards
 {
-    [MenuItem("Chess Cards/Create Prototype Scene")]
-    public static void CreateScene()
+    static class ChessCardsProjectMenu
     {
-        if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-        string path = AssetDatabase.GenerateUniqueAssetPath("Assets/ChessCards/Prototype.unity");
-        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-        var root = new GameObject("Chess Cards Prototype"); root.AddComponent<ChessCardsApp>();
-        var camera = new GameObject("Main Camera").AddComponent<Camera>();
-        camera.tag = "MainCamera"; camera.clearFlags = CameraClearFlags.SolidColor;
-        camera.backgroundColor = new Color(.09f, .12f, .17f); camera.orthographic = true;
-        camera.transform.position = new Vector3(0, 0, -10);
-        EditorSceneManager.SaveScene(scene, path);
-        // Keep existing scenes in the project. The new prototype becomes the entry scene.
-        var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>();
-        scenes.Add(new EditorBuildSettingsScene(path, true));
-        foreach (var existing in EditorBuildSettings.scenes) if (existing.path != path) scenes.Add(existing);
-        EditorBuildSettings.scenes = scenes.ToArray();
-        PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
-        PlayerSettings.allowedAutorotateToPortrait = true;
-        PlayerSettings.allowedAutorotateToPortraitUpsideDown = true;
-        PlayerSettings.allowedAutorotateToLandscapeLeft = true;
-        PlayerSettings.allowedAutorotateToLandscapeRight = true;
-        Selection.activeGameObject = root;
-        Debug.Log("Chess Cards: сцена готова. Нажмите Play и откройте вкладку Game.");
+        const string Project = "Assets/ChessCards/";
+
+        [MenuItem("Chess Cards/Open Courtyard Scene")]
+        static void OpenCourtyard() { Open("Main"); }
+
+        [MenuItem("Chess Cards/Open Match Scene")]
+        static void OpenMatch() { Open("Match"); }
+
+        [MenuItem("Chess Cards/Select Game Balance")]
+        static void SelectBalance() { Select("Config/GameBalance.asset"); }
+
+        [MenuItem("Chess Cards/Select Royal Theme")]
+        static void SelectTheme() { Select("Config/RoyalTheme.asset"); }
+
+        static void Open(string name)
+        {
+            if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                EditorSceneManager.OpenScene(Project + "Scenes/" + name + ".unity");
+        }
+
+        static void Select(string path)
+        {
+            var asset = AssetDatabase.LoadMainAssetAtPath(Project + path);
+            Selection.activeObject = asset;
+            EditorGUIUtility.PingObject(asset);
+        }
     }
 }
 #endif

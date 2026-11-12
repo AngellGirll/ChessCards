@@ -11,14 +11,32 @@ using ChessCards;
 
 namespace UnityEngine
 {
-    public class MonoBehaviour
+    public class Object
+    {
+        public static object SceneObject;
+        protected static T FindAnyObjectByType<T>() where T : class { return SceneObject as T; }
+        protected static void Destroy(Object obj) {}
+        protected static void DontDestroyOnLoad(Object obj) {}
+    }
+    public class MonoBehaviour : Object
     {
         public GameObject gameObject = new GameObject();
-        protected static T FindAnyObjectByType<T>() where T : class { return null; }
+        public bool enabled = true;
     }
-    public class GameObject { public T AddComponent<T>() where T : new() { return new T(); } }
+    public class ScriptableObject : Object {}
+    public class SerializeField : Attribute {}
+    public class CreateAssetMenuAttribute : Attribute { public string menuName, fileName; }
+    public class HeaderAttribute : Attribute { public HeaderAttribute(string text) {} }
+    public class RangeAttribute : Attribute { public RangeAttribute(float min, float max) {} }
+    public class MinAttribute : Attribute { public MinAttribute(float min) {} }
+    public class TooltipAttribute : Attribute { public TooltipAttribute(string text) {} }
+    public class DisallowMultipleComponent : Attribute {}
+    public class AddComponentMenu : Attribute { public AddComponentMenu(string name) {} }
+    public class GameObject : Object { public T AddComponent<T>() where T : new() { return new T(); } }
+    public class AsyncOperation {}
+    public static class Debug { public static void LogWarning(string text) {} }
     public class AudioListener {}
-    public class AudioClip {}
+    public class AudioClip : Object {}
     public class AudioSource
     {
         public AudioClip clip;
@@ -41,6 +59,12 @@ namespace UnityEngine
         public static Color Lerp(Color a,Color b,float t){return new Color(a.r+(b.r-a.r)*t,a.g+(b.g-a.g)*t,a.b+(b.b-a.b)*t,a.a+(b.a-a.a)*t);}
         public string Css(){return "rgb("+(int)(r*255)+","+(int)(g*255)+","+(int)(b*255)+")";}
     }
+    public struct Color32
+    {
+        readonly byte r,g,b,a;
+        public Color32(byte r,byte g,byte b,byte a){this.r=r;this.g=g;this.b=b;this.a=a;}
+        public static implicit operator Color(Color32 c){return new Color(c.r/255f,c.g/255f,c.b/255f,c.a/255f);}
+    }
     public struct Rect
     {
         public float x,y,width,height;
@@ -57,11 +81,11 @@ namespace UnityEngine
     public enum TextAnchor {MiddleLeft,MiddleCenter,UpperLeft}
     public enum FontStyle {Normal,Bold}
     public enum ScaleMode {StretchToFill,ScaleToFit,ScaleAndCrop}
-    public class Font {}
+    public class Font : Object {}
     public enum TextureFormat { RGBA32 }
     public enum FilterMode { Bilinear }
     public enum TextureWrapMode { Clamp }
-    public class Texture2D
+    public class Texture2D : Object
     {
         public string Path;
         public int width = 1, height = 1;
@@ -99,7 +123,7 @@ namespace UnityEngine
     public class GUISkin {public GUIStyle label=new GUIStyle(),button=new GUIStyle();}
     public static class Mathf {public static float Min(float a,float b){return Math.Min(a,b);} }
     public static class Screen {public static int width=1280,height=720;public static Rect safeArea{get{return new Rect(0,0,width,height);}}}
-    public static class Application {public static int targetFrameRate; public static bool isMobilePlatform;}
+    public static class Application {public static int targetFrameRate; public static bool isMobilePlatform; public static bool CanStreamedLevelBeLoaded(string scene) { return scene == "Main" || scene == "Match"; }}
     public static class Time {public static float unscaledTime; public static float unscaledDeltaTime=1f/60;}
     public static class PlayerPrefs
     {
@@ -248,6 +272,29 @@ namespace UnityEngine
         public static void EndGroup(){svg.Append("</g>");var p=origins.Pop();ox=p.x;oy=p.y;}
         public static Vector2 BeginScrollView(Rect r,Vector2 p,Rect content){BeginGroup(r);ox-=p.x;oy-=p.y;return p;}
         public static void EndScrollView(){EndGroup();}
+    }
+}
+
+namespace UnityEngine.SceneManagement
+{
+    public enum LoadSceneMode { Single, Additive }
+    public struct Scene { public string name; }
+    public static class SceneManager
+    {
+        public static event Action<Scene, LoadSceneMode> sceneLoaded;
+        public static string RequestedScene;
+        public static Scene GetActiveScene() { return Active; }
+        public static Scene Active;
+        public static UnityEngine.AsyncOperation LoadSceneAsync(string name, LoadSceneMode mode)
+        {
+            RequestedScene = name;
+            return new UnityEngine.AsyncOperation();
+        }
+        public static void FinishLoad(string name)
+        {
+            Active = new Scene { name = name };
+            sceneLoaded?.Invoke(Active, LoadSceneMode.Single);
+        }
     }
 }
 
@@ -552,6 +599,99 @@ static class UiSmoke
         }
     }
 
+    static void ConfiguredSceneFlow()
+    {
+        const string save = "ChessCards.Restoration.v1", preferencesKey = "ChessCards.Preferences.v1";
+        string stored = UnityEngine.PlayerPrefs.GetString(save, "{}");
+        string savedPreferences = UnityEngine.PlayerPrefs.GetString(preferencesKey, "{}");
+        var balance = new ChessCardsBalance
+        {
+            StartingHand = 3, CopiesPerNumberAndColor = 1, CopiesPerSpecialAndColor = 0,
+            WinReward = 47, BenchPrice = 30, DefaultMusic = .2f, EnabledModes = new[] { GameMode.Domino }
+        };
+        var titleTheme = new ChessCardsTheme { CourtyardTitleRu = "Настраиваемый двор" };
+        var matchTheme = new ChessCardsTheme { BoardDark = new UnityEngine.Color(1, 0, 0) };
+        var courtyardLayout = new ChessCardsScreen
+        {
+            Kind = ScreenKind.Courtyard,
+            Placements = new[]
+            {
+                new ScreenPlacement { Block = ScreenBlock.Play,
+                    Landscape = new UnityEngine.Rect(55, 474, 160, 55), Portrait = new UnityEngine.Rect(55, 1100, 160, 55) },
+                new ScreenPlacement { Block = ScreenBlock.Reward, Landscape = new UnityEngine.Rect(55, 535, 380, 33) }
+            }
+        };
+        var matchLayout = new ChessCardsScreen
+        {
+            Kind = ScreenKind.Match, PreviewMode = GameMode.Go, ThemeOverride = matchTheme
+        };
+        var app = new ChessCardsApp();
+        ChessCardsApp preview = null;
+        try
+        {
+            UnityEngine.Screen.width = 1280; UnityEngine.Screen.height = 720;
+            UnityEngine.Object.SceneObject = courtyardLayout;
+            UnityEngine.SceneManagement.SceneManager.FinishLoad("Main");
+            UnityEngine.PlayerPrefs.SetString(preferencesKey, "{}");
+            Set(app, "useSeparateScenes", true);
+            Set(app, "balance", balance);
+            Set(app, "theme", titleTheme);
+            Call(app, "Awake");
+            var progress = (RestorationProgress)Get(app, "progress");
+            progress.Bench = false;
+            progress.Coins = 40;
+            string court = HoverFrame(app, -1, -1);
+            Check(court.Contains("Настраиваемый двор") && court.Contains(">+47 монет за победу<"), "Theme and custom reward reach UI");
+            Check(Math.Abs(((GamePreferences)Get(app,"preferences")).Music - .2f) < .001f, "Balance applies to new preferences");
+            UnityEngine.GUI.Click(1176,291);Draw(app,"Validation/Previews/transition.svg");
+            Check(progress.Bench && progress.Coins == 10, "Balance config sets actual repair price");
+
+            UnityEngine.GUI.Click(125,498);Draw(app,"Validation/Previews/transition.svg");
+            Check((bool)Get(app,"modeSelection"), "Layout override moves Play hit target");
+            string choices = HoverFrame(app, -1, -1);
+            Check(choices.Contains(">ДОМИНО<") && !choices.Contains(">ШАХМАТЫ<"), "Balance filters visible modes");
+            UnityEngine.GUI.Click(350,265);Draw(app,"Validation/Previews/transition.svg");
+            var match = (CardMatch)Get(app,"match");
+            Check(match.Mode == GameMode.Domino && match.Hands[0].Count == 3 && match.DeckCount == 5,
+                "Balance config sets selected mode and deck");
+            Check((bool)Get(app,"sceneTransition") && UnityEngine.SceneManagement.SceneManager.RequestedScene == "Match",
+                "Starting play loads Match scene");
+
+            UnityEngine.Object.SceneObject = matchLayout;
+            UnityEngine.SceneManagement.SceneManager.FinishLoad("Match");
+            Check(!(bool)Get(app,"sceneTransition") && ReferenceEquals(Get(app,"match"),match) &&
+                ReferenceEquals(Get(app,"lastTheme"),matchTheme), "Scene activation binds its theme without replacing the match");
+            var duplicate = new ChessCardsApp();
+            Set(duplicate,"useSeparateScenes",true);
+            Call(duplicate,"Awake");
+            Check(!duplicate.enabled, "Duplicate scene prefab does not start another session");
+
+            Call(app,"ReturnToCourtyard");
+            Check(UnityEngine.SceneManagement.SceneManager.RequestedScene == "Main", "Return requests Courtyard");
+            UnityEngine.Object.SceneObject = courtyardLayout;
+            UnityEngine.SceneManagement.SceneManager.FinishLoad("Main");
+            Check((bool)Get(app,"location") && ReferenceEquals(Get(app,"lastTheme"),titleTheme) && progress.Bench,
+                "Return restores the global theme and preserves progress");
+
+            Call(app,"OnDestroy");
+            UnityEngine.Object.SceneObject = matchLayout;
+            UnityEngine.SceneManagement.SceneManager.FinishLoad("Match");
+            preview = new ChessCardsApp();
+            Set(preview,"useSeparateScenes",true);
+            Call(preview,"Awake");
+            Check(((CardMatch)Get(preview,"match")).Mode == GameMode.Go, "Opening Match directly uses its preview mode");
+            Console.WriteLine("PASS configurable scene layouts, themes, balance, shared runtime, scene routing and direct preview");
+        }
+        finally
+        {
+            Call(app,"OnDestroy");
+            if (preview != null) Call(preview,"OnDestroy");
+            UnityEngine.Object.SceneObject = null;
+            UnityEngine.PlayerPrefs.SetString(save, stored);
+            UnityEngine.PlayerPrefs.SetString(preferencesKey, savedPreferences);
+        }
+    }
+
     static void SettingsSmoke()
     {
         UnityEngine.Screen.width = 720; UnityEngine.Screen.height = 1280;
@@ -670,6 +810,7 @@ static class UiSmoke
         OverlappingHandSmoke();
         HoverAndRulesSmoke();
         PortraitCourtyardRepair();
+        ConfiguredSceneFlow();
         SettingsSmoke();
         Console.WriteLine("PASS runtime source compilation against isolated adapter; GUI clicks, card selection, board input, mate reward, repair and save/reload");
         Console.WriteLine("Layout previews emitted. This does not replace testing in Unity Editor or a device build.");

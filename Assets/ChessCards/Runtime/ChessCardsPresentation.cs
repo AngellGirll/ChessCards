@@ -18,10 +18,10 @@ namespace ChessCards
         AudioSource musicSource, effectsSource;
         AudioClip clickSound, moveSound, winSound;
 
-        static readonly Color Royal = Hex("6C29A0"), RoyalDeep = Hex("2B104F"), Blue = Hex("1A57A4"),
+        Color Royal = Hex("6C29A0"), RoyalDeep = Hex("2B104F"), Blue = Hex("1A57A4"),
             Green = Hex("397B13"), Amber = Hex("935015"), Red = Hex("9A2547"), Teal = Hex("185D58"),
             Trim = Hex("FFBD4C"), TrimDark = Hex("9F4B14"), TrimLight = Hex("FFE499"), Shadow = Hex("210E31");
-        static readonly Color[] ModeColors = { Blue, Red, Teal, Amber };
+        readonly Color[] modeColors = new Color[4];
         readonly Dictionary<Color, Texture2D> gradients = new Dictionary<Color, Texture2D>();
 
         bool English { get { return preferences.Language == GameLanguage.English; } }
@@ -29,33 +29,111 @@ namespace ChessCards
 
         void LoadPresentation()
         {
-            preferences = new GamePreferences();
+            preferences = DefaultPreferences();
             try { JsonUtility.FromJsonOverwrite(PlayerPrefs.GetString(PreferencesKey, "{}"), preferences); }
-            catch (ArgumentException) { preferences = new GamePreferences(); }
+            catch (ArgumentException) { preferences = DefaultPreferences(); }
             preferences.Normalize();
-            const string art = "ChessCards/Royal/";
-            courtyard = Resources.Load<Texture2D>(art + "Courtyard");
-            restoredCourtyard = Resources.Load<Texture2D>(art + "RestoredCourtyard");
-            LoadCourtyardStyle(art);
-            gameRoom = Resources.Load<Texture2D>(art + "GameRoom");
-            string[] modeNames = { "Chess", "Checkers", "Go", "Domino" };
-            string[] repairNames = { "Bench", "Lantern", "Cottage" };
-            for (int i = 0; i < modeNames.Length; i++) modeArt[i] = Resources.Load<Texture2D>(art + modeNames[i]);
-            for (int i = 0; i < repairNames.Length; i++) repairArt[i] = Resources.Load<Texture2D>(art + repairNames[i]);
-            coinArt = Resources.Load<Texture2D>(art + "Coin");
-            chessPieces = Resources.Load<Texture2D>(art + "ChessPieces");
 
             if (FindAnyObjectByType<AudioListener>() == null) gameObject.AddComponent<AudioListener>();
             musicSource = gameObject.AddComponent<AudioSource>();
             musicSource.playOnAwake = false;
             musicSource.loop = true;
-            musicSource.clip = Resources.Load<AudioClip>(art + "CourtyardMusic");
             effectsSource = gameObject.AddComponent<AudioSource>();
             effectsSource.playOnAwake = false;
-            clickSound = Resources.Load<AudioClip>(art + "Click");
-            moveSound = Resources.Load<AudioClip>(art + "Move");
-            winSound = Resources.Load<AudioClip>(art + "Win");
+            ApplyTheme();
+        }
+
+        GamePreferences DefaultPreferences()
+        {
+            if (balance == null) return new GamePreferences();
+            return new GamePreferences
+            {
+                Language = balance.DefaultLanguage, Difficulty = balance.DefaultDifficulty,
+                Selection = balance.DefaultSelection, Music = balance.DefaultMusic, Effects = balance.DefaultEffects
+            };
+        }
+
+        static TAsset Artwork<TAsset>(TAsset assigned, string path) where TAsset : UnityEngine.Object
+        {
+            return assigned != null ? assigned : Resources.Load<TAsset>(path);
+        }
+
+        static TAsset At<TAsset>(TAsset[] assets, int index) where TAsset : UnityEngine.Object
+        {
+            return assets != null && index < assets.Length ? assets[index] : null;
+        }
+
+        ChessCardsTheme lastTheme;
+        bool themeApplied;
+
+        void ApplyTheme()
+        {
+            ChessCardsTheme config = ActiveTheme;
+            if (themeApplied && lastTheme == config) return;
+            themeApplied = true;
+            lastTheme = config;
+            initialized = false;
+            const string root = "ChessCards/", royalArt = root + "Royal/", cards = root + "Cards/";
+            font = Artwork(config?.InterfaceFont, root + "UI");
+            cardBody = Artwork(config?.CardBody, cards + "Body");
+            cardFrame = Artwork(config?.CardFrame, cards + "Frame");
+            cardBack = Artwork(config?.CardBack, cards + "Back");
+            string[] faces = { "1", "2", "3", "Swap", "Undo", "Skip" };
+            for (int i = 0; i < faces.Length; i++)
+                cardFaces[i] = Artwork(At(config?.CardFaces, i), cards + "Face" + faces[i]);
+            for (int side = 0; side < 2; side++)
+            for (int kind = 1; kind <= 8; kind++)
+                pieces[side, kind] = Artwork(At(side == 0 ? config?.WhitePieces : config?.BlackPieces, kind - 1),
+                    root + (side == 0 ? "White" : "Black") + (PieceType)kind);
+
+            courtyard = Artwork(config?.Courtyard, royalArt + "Courtyard");
+            restoredCourtyard = Artwork(config?.RestoredCourtyard, royalArt + "RestoredCourtyard");
+            gameRoom = Artwork(config?.GameRoom, royalArt + "GameRoom");
+            string[] modeNames = { "Chess", "Checkers", "Go", "Domino" };
+            string[] repairNames = { "Bench", "Lantern", "Cottage" };
+            for (int i = 0; i < modeNames.Length; i++) modeArt[i] = Artwork(At(config?.ModeIcons, i), royalArt + modeNames[i]);
+            for (int i = 0; i < repairNames.Length; i++) repairArt[i] = Artwork(At(config?.RepairIcons, i), royalArt + repairNames[i]);
+            coinArt = Artwork(config?.Coin, royalArt + "Coin");
+            chessPieces = config != null ? config.ChessPiecesAtlas : Resources.Load<Texture2D>(royalArt + "ChessPieces");
+            ApplyPalette(config);
+            LoadCourtyardStyle(royalArt, config);
+            AudioClip music = Artwork(config?.Music, royalArt + "CourtyardMusic");
+            if (musicSource.clip != music)
+            {
+                musicSource.Stop();
+                musicSource.clip = music;
+            }
+            clickSound = Artwork(config?.Click, royalArt + "Click");
+            moveSound = Artwork(config?.Move, royalArt + "Move");
+            winSound = Artwork(config?.Win, royalArt + "Win");
             ApplyVolumes();
+        }
+
+        void ApplyPalette(ChessCardsTheme config)
+        {
+            // A scene override may be followed by the unconfigured legacy screen.
+            background = config?.ScreenBackground ?? Hex("200D31");
+            panel = config?.Panel ?? Hex("492469");
+            ink = config?.Text ?? Hex("FFF9F2");
+            muted = config?.MutedText ?? Hex("F0D8FB");
+            gold = config?.GoldText ?? Hex("FFE098");
+            Royal = config?.Purple ?? Hex("6C29A0");
+            RoyalDeep = config?.DarkPurple ?? Hex("2B104F");
+            Blue = config?.Blue ?? Hex("1A57A4");
+            Green = config?.Green ?? Hex("397B13");
+            Amber = config?.Amber ?? Hex("935015");
+            Red = config?.Red ?? Hex("9A2547");
+            Teal = config?.Teal ?? Hex("185D58");
+            Trim = config?.Trim ?? Hex("FFBD4C");
+            TrimDark = config?.TrimDark ?? Hex("9F4B14");
+            TrimLight = config?.TrimLight ?? Hex("FFE499");
+            Shadow = config?.Shadow ?? Hex("210E31");
+            modeColors[0] = Blue; modeColors[1] = Red; modeColors[2] = Teal; modeColors[3] = Amber;
+            cardColors[0] = Hex("E22E49"); cardColors[1] = Hex("315DE5");
+            cardColors[2] = Hex("24A322"); cardColors[3] = Hex("E79D23");
+            if (config != null && config.CardColors != null)
+                for (int i = 0; i < Math.Min(cardColors.Length, config.CardColors.Length); i++)
+                    cardColors[i] = config.CardColors[i];
         }
 
         void ApplyVolumes()
@@ -84,7 +162,7 @@ namespace ChessCards
         {
             if (preferences.Selection == ModeSelection.Random)
             {
-                selectedMode = preferences.DrawMode(modeRandom);
+                selectedMode = enabledModes[modeRandom.Next(enabledModes.Count)];
                 StartMatch();
             }
             else modeSelection = true;
@@ -92,13 +170,13 @@ namespace ChessCards
 
         void Replay()
         {
-            if (preferences.Selection == ModeSelection.Random) selectedMode = preferences.DrawMode(modeRandom);
+            if (preferences.Selection == ModeSelection.Random) selectedMode = enabledModes[modeRandom.Next(enabledModes.Count)];
             StartMatch();
         }
 
         void DrawSettings()
         {
-            Rect r = portrait ? new Rect(32, 285, w - 64, 710) : new Rect(300, 36, 680, 648);
+            Rect r = Region(ScreenBlock.SettingsWindow, portrait ? new Rect(32, 285, w - 64, 710) : new Rect(300, 36, 680, 648));
             Overlay(r, T("Настройки", "Settings"));
             float x = r.x + 28, width = r.width - 56, y = r.y + 92;
             GameLanguage languageBefore = preferences.Language;

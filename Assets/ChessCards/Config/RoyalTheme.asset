@@ -1,0 +1,99 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d01a3e344e8a5dcdacd3d56de32e0007, type: 3}
+  m_Name: RoyalTheme
+  m_EditorClassIdentifier:
+  InterfaceFont: {fileID: 12800000, guid: 2493a64e564f51ac94422d1796146366, type: 3}
+  Courtyard: {fileID: 2800000, guid: 5989b1f6693a5dfea4983bcaebb6a28d, type: 3}
+  RestoredCourtyard: {fileID: 2800000, guid: 2c553180fdac5cd0b8dbd910cbefcfb4, type: 3}
+  GameRoom: {fileID: 2800000, guid: fd508a5e1a735e478ae36dc82dd484c8, type: 3}
+  CourtyardTitleRu: Королевский двор
+  CourtyardTitleEn: Royal Courtyard
+  RestorationTitleRu: Восстановление
+  RestorationTitleEn: Restoration
+  HandLift: 17
+  HandSpacing: 0.82
+  CardBody: {fileID: 2800000, guid: 2dcd78735ed95883988522415ed16ad7, type: 3}
+  CardFrame: {fileID: 2800000, guid: b25668ec86034cff81afac012517d38c, type: 3}
+  CardBack: {fileID: 2800000, guid: 258d22ac4c64593b98e2c92cd1ffa7d2, type: 3}
+  ChessPiecesAtlas: {fileID: 2800000, guid: 318d32fd178e597aaf516c3d8d587f0d, type: 3}
+  Coin: {fileID: 2800000, guid: 6eac3aa7b3d9532582039b3df19656b0, type: 3}
+  Crown: {fileID: 2800000, guid: 76d62dc2d37c5dffbfa932b51fcfa1d3, type: 3}
+  Crest: {fileID: 2800000, guid: 98beb56505485fefa3d96476bab8daed, type: 3}
+  Corner: {fileID: 2800000, guid: 7a2b6f7d4b00529b917d37135d0b7ba9, type: 3}
+  Music: {fileID: 8300000, guid: 85a85d1d2e3350e1b420a6f561972f15, type: 3}
+  Click: {fileID: 8300000, guid: cf3149b816e955e094d2bf95bacd2591, type: 3}
+  Move: {fileID: 8300000, guid: be88565469065db699e278b47bebff4d, type: 3}
+  Win: {fileID: 8300000, guid: 4dd21a60ef095286a788f79e1152ad45, type: 3}
+  CardFaces:
+  - {fileID: 2800000, guid: efb912d1d10b5dc6a76a512a33a8fc36, type: 3}
+  - {fileID: 2800000, guid: b38ee5aae51d50b7bd2be0a6451a0c00, type: 3}
+  - {fileID: 2800000, guid: 27aae78edf5c53a69c93117e7d0296c7, type: 3}
+  - {fileID: 2800000, guid: 040f1e61348850f28463ddc6035ec436, type: 3}
+  - {fileID: 2800000, guid: b42e357354035ba38afe9da8f16b8863, type: 3}
+  - {fileID: 2800000, guid: f0df5b4c0a7b55c0a37b17ef01a93d20, type: 3}
+  ModeIcons:
+  - {fileID: 2800000, guid: e0cf6646890d56b882b5385105296437, type: 3}
+  - {fileID: 2800000, guid: 92bdc0dc4a965a2c9027c0bcb055fc4e, type: 3}
+  - {fileID: 2800000, guid: d83c95cd4fcd500c904609cc148dd5f6, type: 3}
+  - {fileID: 2800000, guid: f93cc94a5ea5562695dd85b9bb7e2b99, type: 3}
+  RepairIcons:
+  - {fileID: 2800000, guid: 8633d4b07cc2543e8b1c1e0a95c3b9b7, type: 3}
+  - {fileID: 2800000, guid: 63624166de7b5ac2969dd92ea9754342, type: 3}
+  - {fileID: 2800000, guid: 67a282a67ad551648aaabea944faf2d2, type: 3}
+  WhitePieces:
+  - {fileID: 2800000, guid: 4fe1624a13615fa89c424e2c58f650a8, type: 3}
+  - {fileID: 2800000, guid: d358f3272aed50a0aa6e83f329e49012, type: 3}
+  - {fileID: 2800000, guid: 0012f7ada3895b45a70260f1be55c363, type: 3}
+  - {fileID: 2800000, guid: aa3c8aafe8005846aa0c3262e819e9e7, type: 3}
+  - {fileID: 2800000, guid: 0316ed00a9ed563dab82efab57f26938, type: 3}
+  - {fileID: 2800000, guid: 9689018062f656248b0b9ff26847e022, type: 3}
+  - {fileID: 2800000, guid: 991f4f3a4c5054d881548ca8d43e9f5a, type: 3}
+  - {fileID: 2800000, guid: c3cfb79861aa5f1083140de91003b761, type: 3}
+  BlackPieces:
+  - {fileID: 2800000, guid: fc654a52bb875053b63b6ce9b16bbb9b, type: 3}
+  - {fileID: 2800000, guid: 1228fdab2ba856099931de37746fa3d1, type: 3}
+  - {fileID: 2800000, guid: a4e1b7e451a051d8b29fc2492d0e9845, type: 3}
+  - {fileID: 2800000, guid: 9c5bcc0e364e5462b853477d6d5feb7c, type: 3}
+  - {fileID: 2800000, guid: 5008c71d39145b8a92f301618597a4b4, type: 3}
+  - {fileID: 2800000, guid: beecf9b492ec56499c6ba2283101bee5, type: 3}
+  - {fileID: 2800000, guid: 4ee439f74ba657769c319d912af05eac, type: 3}
+  - {fileID: 2800000, guid: 139f908e21c655469f1cd1bc0b298dc4, type: 3}
+  ScreenBackground: {r: 0.12549020, g: 0.05098039, b: 0.19215686, a: 1}
+  Panel: {r: 0.28627451, g: 0.14117647, b: 0.41176471, a: 1}
+  Text: {r: 1.00000000, g: 0.97647059, b: 0.94901961, a: 1}
+  MutedText: {r: 0.94117647, g: 0.84705882, b: 0.98431373, a: 1}
+  GoldText: {r: 1.00000000, g: 0.87843137, b: 0.59607843, a: 1}
+  Purple: {r: 0.42352941, g: 0.16078431, b: 0.62745098, a: 1}
+  DarkPurple: {r: 0.16862745, g: 0.06274510, b: 0.30980392, a: 1}
+  Blue: {r: 0.10196078, g: 0.34117647, b: 0.64313725, a: 1}
+  Green: {r: 0.22352941, g: 0.48235294, b: 0.07450980, a: 1}
+  Amber: {r: 0.57647059, g: 0.31372549, b: 0.08235294, a: 1}
+  Red: {r: 0.60392157, g: 0.14509804, b: 0.27843137, a: 1}
+  Teal: {r: 0.09411765, g: 0.36470588, b: 0.34509804, a: 1}
+  Trim: {r: 1.00000000, g: 0.74117647, b: 0.29803922, a: 1}
+  TrimDark: {r: 0.62352941, g: 0.29411765, b: 0.07843137, a: 1}
+  TrimLight: {r: 1.00000000, g: 0.89411765, b: 0.60000000, a: 1}
+  Shadow: {r: 0.12941176, g: 0.05490196, b: 0.19215686, a: 1}
+  CourtyardBurgundy: {r: 0.34901961, g: 0.11372549, b: 0.22352941, a: 1}
+  CourtyardVelvet: {r: 0.30588235, g: 0.08235294, b: 0.19215686, a: 1}
+  CourtyardGround: {r: 0.16078431, g: 0.06666667, b: 0.13725490, a: 1}
+  CourtyardWood: {r: 0.50196078, g: 0.28235294, b: 0.17647059, a: 1}
+  CourtyardPrice: {r: 0.39607843, g: 0.27450980, b: 0.22745098, a: 1}
+  CourtyardComplete: {r: 0.74509804, g: 0.90196078, b: 0.62745098, a: 1}
+  BoardLight: {r: 0.97647059, g: 0.90196078, b: 0.73333333, a: 1}
+  BoardDark: {r: 0.19215686, g: 0.50196078, b: 0.48627451, a: 1}
+  CardColors:
+  - {r: 0.88627451, g: 0.18039216, b: 0.28627451, a: 1}
+  - {r: 0.19215686, g: 0.36470588, b: 0.89803922, a: 1}
+  - {r: 0.14117647, g: 0.63921569, b: 0.13333333, a: 1}
+  - {r: 0.90588235, g: 0.61568627, b: 0.13725490, a: 1}

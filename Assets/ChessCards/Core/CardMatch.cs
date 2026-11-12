@@ -75,7 +75,8 @@ namespace ChessCards
         public Side SideFor(int actor) { return actor == 0 ? HumanSide : ChessPosition.Other(HumanSide); }
         public int OwnerOf(Side side) { return side == HumanSide ? 0 : 1; }
 
-        public CardMatch(int seed, ChessPosition position = null, GameMode mode = GameMode.Chess)
+        public CardMatch(int seed, ChessPosition position = null, GameMode mode = GameMode.Chess,
+            int handSize = 5, int numberCopies = 4, int specialCopies = 2)
         {
             random = new Random(seed);
             Mode = position == null ? mode : position.Mode;
@@ -84,15 +85,28 @@ namespace ChessCards
             else Board = position == null ? ChessPosition.Initial(mode) : position.Clone();
             HumanSide = Mode == GameMode.Go ? Side.Black : Side.White;
             Actor = 0; Winner = -1; Turn = 1;
+            numberCopies = Math.Max(1, Math.Min(4, numberCopies));
+            specialCopies = Math.Max(0, Math.Min(2, specialCopies));
             for (int color = 0; color < 4; color++)
             {
-                for (int n = 1; n <= 3; n++) for (int copy = 0; copy < 4; copy++) deck.Add(new Card(color, n));
-                for (int k = 1; k <= 3; k++) for (int copy = 0; copy < 2; copy++) deck.Add(new Card(color, (CardKind)k));
+                for (int n = 1; n <= 3; n++) for (int copy = 0; copy < numberCopies; copy++) deck.Add(new Card(color, n));
+                for (int k = 1; k <= 3; k++) for (int copy = 0; copy < specialCopies; copy++) deck.Add(new Card(color, (CardKind)k));
             }
             Shuffle(deck);
-            for (int actor = 0; actor < 2; actor++) for (int n = 0; n < 5; n++) Hands[actor].Add(Pop());
             int start = deck.FindIndex(c => c.Kind == CardKind.Number);
-            discard.Add(deck[start]); deck.RemoveAt(start);
+            // Keep the original deal order when a starting number remains after dealing.
+            int dealCount = Math.Max(1, Math.Min(handSize, (deck.Count - 1) / 2));
+            if (start >= deck.Count - dealCount * 2)
+            {
+                Card first = deck[start];
+                deck.RemoveAt(start);
+                deck.Insert(0, first);
+            }
+            for (int actor = 0; actor < 2; actor++)
+                for (int n = 0; n < dealCount; n++) Hands[actor].Add(Pop());
+            start = deck.FindIndex(c => c.Kind == CardKind.Number);
+            discard.Add(deck[start]);
+            deck.RemoveAt(start);
             SetMessage("Выбери карту по цвету или значению.", "Choose a card of the same color or value."); CheckStart();
         }
         void Shuffle(List<Card> cards)
@@ -405,11 +419,20 @@ namespace ChessCards
         public bool Repaired(int index) { return index == 0 ? Bench : index == 1 ? Lamp : House; }
         public bool Repair(int index)
         {
-            if (index < 0 || index > 2 || Repaired(index) || Coins < Prices[index]) return false;
-            Coins -= Prices[index];
+            return index >= 0 && index < Prices.Length && Repair(index, Prices[index]);
+        }
+
+        public bool Repair(int index, int price)
+        {
+            if (index < 0 || index >= Prices.Length || price < 0 || Repaired(index) || Coins < price) return false;
+            Coins -= price;
             if (index == 0) Bench = true; else if (index == 1) Lamp = true; else House = true;
             return true;
         }
-        public void AwardWin() { Coins += 100; Wins++; }
+        public void AwardWin(int reward = 100)
+        {
+            Coins = (int)Math.Min(int.MaxValue, (long)Coins + Math.Max(0, reward));
+            if (Wins < int.MaxValue) Wins++;
+        }
     }
 }

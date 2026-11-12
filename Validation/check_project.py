@@ -40,19 +40,40 @@ for p in assets.rglob('*'):
     assert guid not in guids, 'Duplicate GUID: ' + guid
     guids[guid] = p
 
-scene = root / 'Assets/ChessCards/Scenes/Main.unity'
-scene_text = scene.read_text()
-script_guids = re.findall(r'm_Script: \{fileID: 11500000, guid: ([0-9a-f]{32}), type: 3\}', scene_text)
-assert len(script_guids) == 1
-assert guids[script_guids[0]] == root / 'Assets/ChessCards/Runtime/ChessCardsApp.cs'
-object_ids = set(re.findall(r'^--- !u!\d+ &(\d+)', scene_text, re.M))
-for reference in re.findall(r'\{fileID: (\d+)\}', scene_text):
-    assert reference == '0' or reference in object_ids, 'Broken scene object reference: ' + reference
-assert 'm_Name: Main Camera' in scene_text and 'm_TagString: MainCamera' in scene_text
-assert 'm_Name: Chess Cards Prototype' in scene_text
+project = assets / 'ChessCards'
+prefabs = project / 'Prefabs'
+host = prefabs / 'ChessCards Runtime.prefab'
+host_text = host.read_text()
+assert 'useSeparateScenes: 1' in host_text
+assert 'courtyardScene: Main' in host_text and 'matchScene: Match' in host_text
+
 build = (root / 'ProjectSettings/EditorBuildSettings.asset').read_text()
-scene_guid = re.search(r'^guid: (\w+)', scene.with_name(scene.name + '.meta').read_text(), re.M)[1]
-assert 'path: Assets/ChessCards/Scenes/Main.unity' in build and 'guid: ' + scene_guid in build
+assert build.index('Scenes/Main.unity') < build.index('Scenes/Match.unity')
+for name, layout in [('Main', 'Courtyard Layout'), ('Match', 'Match Layout')]:
+    scene = project / 'Scenes' / (name + '.unity')
+    scene_text = scene.read_text()
+    dependencies = re.findall(r'm_SourcePrefab: \{fileID: 100100000, guid: ([0-9a-f]{32}), type: 3\}', scene_text)
+    assert {guids[guid] for guid in dependencies} == {host, prefabs / (layout + '.prefab')}
+    object_ids = set(re.findall(r'^--- !u!\d+ &(\d+)', scene_text, re.M))
+    for reference in re.findall(r'\{fileID: (\d+)\}', scene_text):
+        assert reference == '0' or reference in object_ids, 'Broken scene object reference: ' + reference
+    assert 'm_Name: Main Camera' in scene_text and 'm_TagString: MainCamera' in scene_text
+    scene_guid = re.search(r'^guid: (\w+)', scene.with_suffix('.unity.meta').read_text(), re.M)[1]
+    assert f'  - enabled: 1\n    path: Assets/ChessCards/Scenes/{name}.unity\n    guid: {scene_guid}' in build
+
+for path in [*prefabs.glob('*.prefab'), *(project / 'Config').glob('*.asset')]:
+    for guid in re.findall(r'guid: ([0-9a-f]{32})', path.read_text()):
+        assert guid in guids, f'Missing referenced asset {guid} in {path}'
+
+for folder in ('Core', 'Runtime', 'Editor'):
+    asm = json.loads((project / folder / f'ChessCards.{folder}.asmdef').read_text())
+    assert asm['name'] == 'ChessCards.' + folder
+    if folder == 'Core':
+        assert asm['noEngineReferences']
+    if folder == 'Runtime':
+        assert 'ChessCards.Core' in asm['references']
+    if folder == 'Editor':
+        assert asm['includePlatforms'] == ['Editor']
 assert re.search(r'^  webGLTemplate: PROJECT:RoyalCourtyard$', settings, re.M)
 template = assets / 'WebGLTemplates/RoyalCourtyard/index.html'
 assert template.is_file() and 'createUnityInstance' in template.read_text()

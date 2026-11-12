@@ -5,16 +5,25 @@ namespace ChessCards
 {
     public sealed partial class ChessCardsApp
     {
-        static readonly Color YardBurgundy = Hex("591D39"), YardVelvet = Hex("4E1531"),
+        Color YardBurgundy = Hex("591D39"), YardVelvet = Hex("4E1531"),
             YardGround = Hex("291123"), YardWood = Hex("80482D"), YardPrice = Hex("65463A"),
             YardComplete = Hex("BEE6A0");
         Texture2D yardCrown, yardCrest, yardCorner, yardVelvetTexture, yardWoodTexture, yardFade;
 
-        void LoadCourtyardStyle(string resourceRoot)
+        void LoadCourtyardStyle(string resourceRoot, ChessCardsTheme config)
         {
-            yardCrown = Resources.Load<Texture2D>(resourceRoot + "YardCrown");
-            yardCrest = Resources.Load<Texture2D>(resourceRoot + "YardCrest");
-            yardCorner = Resources.Load<Texture2D>(resourceRoot + "YardCorner");
+            yardCrown = Artwork(config?.Crown, resourceRoot + "YardCrown");
+            yardCrest = Artwork(config?.Crest, resourceRoot + "YardCrest");
+            yardCorner = Artwork(config?.Corner, resourceRoot + "YardCorner");
+            YardBurgundy = config?.CourtyardBurgundy ?? Hex("591D39");
+            YardVelvet = config?.CourtyardVelvet ?? Hex("4E1531");
+            YardGround = config?.CourtyardGround ?? Hex("291123");
+            YardWood = config?.CourtyardWood ?? Hex("80482D");
+            YardPrice = config?.CourtyardPrice ?? Hex("65463A");
+            YardComplete = config?.CourtyardComplete ?? Hex("BEE6A0");
+            if (yardVelvetTexture != null) Destroy(yardVelvetTexture);
+            if (yardWoodTexture != null) Destroy(yardWoodTexture);
+            if (yardFade != null) Destroy(yardFade);
             yardVelvetTexture = CourtyardSurface(YardVelvet, false);
             yardWoodTexture = CourtyardSurface(YardWood, true);
 
@@ -68,7 +77,7 @@ namespace ChessCards
             if (portrait)
                 Rounded(new Rect(0, 555, w, 250), Color.white, 0, yardFade);
             DrawCourtyardHeader();
-            DrawRestorationPanel(portrait ? new Rect(32, 690, 656, 393) : new Rect(834, 115, 414, 445), repaired);
+            DrawRestorationPanel(Region(ScreenBlock.Restoration, portrait ? new Rect(32, 690, 656, 393) : new Rect(834, 115, 414, 445)), repaired);
             DrawCourtyardFooter(repaired);
         }
 
@@ -108,21 +117,21 @@ namespace ChessCards
 
         void DrawCourtyardHeader()
         {
-            Rect title = new Rect(portrait ? 44 : 58, 25, portrait ? 407 : 511, portrait ? 62 : 66);
+            Rect title = Region(ScreenBlock.Title, new Rect(portrait ? 44 : 58, 25, portrait ? 407 : 511, portrait ? 62 : 66));
             Framed(title, YardBurgundy, 22, 4);
             var titleText = new Rect(title.x + 34, title.y, title.width - 57, title.height);
-            YardText(titleText, T("Королевский двор", "Royal Courtyard"), portrait ? 28 : 37, TrimLight, true);
+            YardText(titleText, T(ActiveTheme?.CourtyardTitleRu ?? "Королевский двор", ActiveTheme?.CourtyardTitleEn ?? "Royal Courtyard"), portrait ? 28 : 37, TrimLight, true);
             if (yardCrown != null)
-                GUI.DrawTexture(new Rect(28, 16, portrait ? 59 : 73, portrait ? 77 : 82), yardCrown, ScaleMode.ScaleToFit);
+                GUI.DrawTexture(new Rect(title.x - (portrait ? 16 : 30), title.y - 9, portrait ? 59 : 73, title.height + 15), yardCrown, ScaleMode.ScaleToFit);
 
-            YardText(new Rect(50, portrait ? 91 : 99, 238, 33),
+            YardText(Region(ScreenBlock.Wins, new Rect(50, portrait ? 91 : 99, 238, 33)),
                 T("Побед: ", "Wins: ") + progress.Wins, portrait ? 23 : 21, ink, false);
-            var wallet = new Rect(w - (portrait ? 253 : 258), 25, portrait ? 150 : 155, 55);
+            var wallet = Region(ScreenBlock.Wallet, new Rect(w - (portrait ? 253 : 258), 25, portrait ? 150 : 155, 55));
             Framed(wallet, YardBurgundy, 19, 3);
             DrawCoin(new Rect(wallet.x + 10, wallet.y + 7, 40, 40));
             Label(new Rect(wallet.x + 52, wallet.y, wallet.width - 62, wallet.height),
                 progress.Coins.ToString(), 25, ink, true, true);
-            if (Button(new Rect(w - 91, 25, 64, 55), "⚙", YardBurgundy, true, 29)) settingsOpen = true;
+            if (Button(Region(ScreenBlock.Settings, new Rect(w - 91, 25, 64, 55)), "⚙", YardBurgundy, true, 29)) settingsOpen = true;
         }
 
         void DrawRestorationPanel(Rect panelRect, int repaired)
@@ -132,7 +141,7 @@ namespace ChessCards
             Rect heading = new Rect(panelRect.x + 7, panelRect.y + 7, panelRect.width - 14, portrait ? 54 : 59);
             Rounded(heading, Color.white, 16, yardWoodTexture);
             Fill(new Rect(heading.x + 12, heading.y + heading.height - 1, heading.width - 24, 1), Hex("BE7841"));
-            YardText(heading, T("Восстановление", "Restoration"), portrait ? 32 : 29, ink, true);
+            YardText(heading, T(ActiveTheme?.RestorationTitleRu ?? "Восстановление", ActiveTheme?.RestorationTitleEn ?? "Restoration"), portrait ? 32 : 29, ink, true);
 
             if (yardCrest != null)
                 GUI.DrawTexture(new Rect(panelRect.x + panelRect.width / 2 - 55, panelRect.y - 27, 110, 38),
@@ -154,7 +163,7 @@ namespace ChessCards
                 Rounded(fill, Color.white, 5, Gloss(Trim));
             }
 
-            float rowHeight = portrait ? 82 : 100;
+            float rowHeight = (panelRect.height - (portrait ? 147 : 145)) / total;
             for (int i = 0; i < total; i++)
             {
                 var row = new Rect(panelRect.x + 19, panelRect.y + 126 + i * rowHeight, panelRect.width - 38, rowHeight);
@@ -195,10 +204,10 @@ namespace ChessCards
                 return;
             }
 
-            int cost = RestorationProgress.Prices[index];
+            int cost = RepairPrice(index);
             if (progress.Coins >= cost)
             {
-                if (Button(action, "", Green) && progress.Repair(index))
+                if (Button(action, "", Green) && progress.Repair(index, cost))
                 {
                     lastRepair = index;
                     Save();
@@ -219,12 +228,12 @@ namespace ChessCards
             else if (lastRepair >= 0)
                 notice = RepairName(lastRepair) + T(" • ремонт завершён!", " • repair complete!");
             else if (showLastResult && match != null)
-                notice = match.Winner == 0 ? T("Победа! +100 монет на ремонт.", "You win! +100 coins for repairs.") : match.GetResult(English);
+                notice = match.Winner == 0 ? T("Победа! +", "You win! +") + WinReward + T(" монет на ремонт.", " coins for repairs.") : match.GetResult(English);
             if (notice.Length != 0)
-                YardText(portrait ? new Rect(34, 1085, 652, 37) : new Rect(834, 573, 414, 61),
+                YardText(Region(ScreenBlock.Notice, portrait ? new Rect(34, 1085, 652, 37) : new Rect(834, 573, 414, 61)),
                     notice, portrait ? 20 : 18, ink, true);
 
-            var play = portrait ? new Rect(104, 1130, 512, 68) : new Rect(220, 575, 380, 73);
+            var play = Region(ScreenBlock.Play, portrait ? new Rect(104, 1130, 512, 68) : new Rect(220, 575, 380, 73));
             string label = T("Играть", "Play") + (preferences.Selection == ModeSelection.Random ? T("  •  Рандом", "  •  Random") : "  ▶");
             if (Button(play, label, Green, true, portrait ? 30 : 33))
             {
@@ -233,8 +242,8 @@ namespace ChessCards
             }
             DrawYardCorner(new Rect(play.x - 3, play.y - 4, 43, 44), false, false);
             DrawYardCorner(new Rect(play.x + play.width - 40, play.y - 4, 43, 44), true, false);
-            YardText(new Rect(play.x - 15, play.y + play.height + 8, play.width + 30, 33),
-                T("+100 монет за победу", "+100 coins per win"), portrait ? 23 : 22, ink, true);
+            YardText(Region(ScreenBlock.Reward, new Rect(play.x - 15, play.y + play.height + 8, play.width + 30, 33)),
+                "+" + WinReward + T(" монет за победу", " coins per win"), portrait ? 23 : 22, ink, true);
         }
 
         void YardText(Rect r, string value, int size, Color color, bool centered)
