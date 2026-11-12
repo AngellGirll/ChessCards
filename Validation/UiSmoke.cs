@@ -45,6 +45,14 @@ namespace UnityEngine
     {
         public float x,y,width,height;
         public Rect(float x,float y,float w,float h){this.x=x;this.y=y;width=w;height=h;}
+        public bool Contains(Vector2 point){return point.x>=x && point.x<x+width && point.y>=y && point.y<y+height;}
+    }
+    public enum EventType { Repaint }
+    public class Event
+    {
+        public static Event current = new Event();
+        public EventType type = EventType.Repaint;
+        public Vector2 mousePosition = new Vector2(-1,-1);
     }
     public enum TextAnchor {MiddleLeft,MiddleCenter,UpperLeft}
     public enum FontStyle {Normal,Bold}
@@ -82,6 +90,11 @@ namespace UnityEngine
         public GUIStyle(){}
         public GUIStyle(GUIStyle a){font=a.font;fontSize=a.fontSize;wordWrap=a.wordWrap;alignment=a.alignment;normal.textColor=a.normal.textColor;}
         public float CalcHeight(GUIContent c,float width){return GUI.Wrap(c.text,width,fontSize).Count*fontSize*1.3f;}
+        public void Draw(Rect r, GUIContent content, bool hover, bool active, bool on, bool focus)
+        {
+            if (hover || active || on || focus) throw new Exception("Static text must use its normal style");
+            GUI.DrawLabel(r, content.text, this);
+        }
     }
     public class GUISkin {public GUIStyle label=new GUIStyle(),button=new GUIStyle();}
     public static class Mathf {public static float Min(float a,float b){return Math.Min(a,b);} }
@@ -134,7 +147,8 @@ namespace UnityEngine
         static Stack<Vector2> origins=new Stack<Vector2>();
         static int clip;
         public static void Begin(){ox=oy=0;origins.Clear();clip=0;svg=new StringBuilder("<svg xmlns='http://www.w3.org/2000/svg' width='"+Screen.width+"' height='"+Screen.height+"'>");}
-        public static void Click(float x,float y){cx=x;cy=y;click=true;}
+        public static void Hover(float x,float y){Event.current.mousePosition=new Vector2(x,y);}
+        public static void Click(float x,float y){Hover(x,y);cx=x;cy=y;click=true;}
         public static void Save(string path){File.WriteAllText(path,svg.ToString()+"</svg>");click=false;}
         public static bool Button(Rect r,GUIContent content,GUIStyle style)
         {
@@ -196,7 +210,7 @@ namespace UnityEngine
             }
             return result;
         }
-        public static void Label(Rect r,string t,GUIStyle style)
+        public static void DrawLabel(Rect r,string t,GUIStyle style)
         {
             var lines=Wrap(t,r.width,style.fontSize);float lh=style.fontSize*1.25f;
             float y=r.y+oy+(style.alignment==TextAnchor.UpperLeft?0:(r.height-lines.Count*lh)/2)+style.fontSize;
@@ -391,6 +405,42 @@ static class UiSmoke
         Console.WriteLine("PASS horizontal play, mode selection, card input and board actions");
     }
 
+    static string HoverFrame(ChessCardsApp app, float x, float y)
+    {
+        const string path = "Validation/Previews/hover.svg";
+        UnityEngine.GUI.Hover(x, y);
+        Draw(app, path);
+        return File.ReadAllText(path);
+    }
+
+    static void HoverAndRulesSmoke()
+    {
+        UnityEngine.Screen.width = 720; UnityEngine.Screen.height = 1280;
+        var app = new ChessCardsApp(); Call(app, "Awake");
+        string courtyard = HoverFrame(app, -1, -1);
+        Check(!courtyard.Contains(">Правила<"), "Rules should only be available during a match");
+        Check(courtyard == HoverFrame(app, 200, 50), "Courtyard heading must not change on hover");
+        Check(courtyard != HoverFrame(app, 350, 1160), "Enabled Play button shows hover feedback");
+        Check(courtyard == HoverFrame(app, 137, 990), "Unaffordable repair must not change on hover");
+
+        UnityEngine.GUI.Click(650, 50); Draw(app, "Validation/Previews/transition.svg");
+        Check((bool)Get(app, "settingsOpen"), "Open Settings for modal hover test");
+        string settings = HoverFrame(app, -1, -1);
+        Check(settings == HoverFrame(app, 350, 1160), "Settings must block hover on Play underneath");
+        Check(settings == HoverFrame(app, 650, 50), "Settings must block hover on the gear underneath");
+        Check(settings == HoverFrame(app, 300, 321), "Settings heading must not change on hover");
+        Check(settings != HoverFrame(app, 350, 516), "An enabled option in Settings shows hover feedback");
+        UnityEngine.GUI.Click(350, 1160); Draw(app, "Validation/Previews/transition.svg");
+        Check((bool)Get(app, "settingsOpen") && !(bool)Get(app, "modeSelection"), "Settings must block clicks underneath");
+        UnityEngine.GUI.Click(340, 950); Draw(app, "Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(350, 1160); Draw(app, "Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(500, 520); Draw(app, "Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(530, 48); Draw(app, "Validation/Previews/transition.svg");
+        Check((bool)Get(app, "rules") && HoverFrame(app, -1, -1).Contains("Русские шашки на доске"),
+            "Rules button in a match shows the active game's rules");
+        Console.WriteLine("PASS hover on enabled buttons only, static headings, modal input blocking and match-specific rules");
+    }
+
     static void SettingsSmoke()
     {
         UnityEngine.Screen.width = 720; UnityEngine.Screen.height = 1280;
@@ -500,6 +550,7 @@ static class UiSmoke
         CheckersModeSmoke();
         GoDominoModeSmoke();
         LandscapeGameplay();
+        HoverAndRulesSmoke();
         SettingsSmoke();
         Console.WriteLine("PASS runtime source compilation against isolated adapter; GUI clicks, card selection, board input, mate reward, repair and save/reload");
         Console.WriteLine("Layout previews emitted. This does not replace testing in Unity Editor or a device build.");

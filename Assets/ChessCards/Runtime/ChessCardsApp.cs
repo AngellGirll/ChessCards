@@ -167,11 +167,10 @@ namespace ChessCards
         void Styles()
         {
             if (initialized) return;
-            text = new GUIStyle(GUI.skin.label) { font = font, fontSize = 22, wordWrap = true, alignment = TextAnchor.MiddleLeft };
+            text = new GUIStyle { font = font, fontSize = 22, wordWrap = true, alignment = TextAnchor.MiddleLeft };
             text.normal.textColor = ink;
             center = new GUIStyle(text) { alignment = TextAnchor.MiddleCenter };
             bold = new GUIStyle(text) { fontStyle = FontStyle.Bold };
-            GUI.skin.button.font = font;
             initialized = true;
         }
         void OnGUI()
@@ -215,13 +214,23 @@ namespace ChessCards
             GUIStyle style = strong ? bold : centered ? center : text;
             style.fontSize = size; style.normal.textColor = color ?? ink;
             style.alignment = centered ? TextAnchor.MiddleCenter : TextAnchor.MiddleLeft;
-            GUI.Label(r, value, style);
+            DrawStaticText(r, value, style);
         }
+
+        static void DrawStaticText(Rect r, string value, GUIStyle style)
+        {
+            if (Event.current.type == EventType.Repaint)
+                style.Draw(r, new GUIContent(value), false, false, false, false);
+        }
+
         bool Button(Rect r, string value, Color? color = null, bool enabled = true, int size = 22)
         {
             bool old = GUI.enabled;
             GUI.enabled = old && enabled;
-            Framed(r, enabled ? color ?? Royal : Hex("564461"), Math.Min(15, r.height / 3), 3);
+            Color face = enabled ? color ?? Royal : Hex("564461");
+            if (GUI.enabled && r.Contains(Event.current.mousePosition))
+                face = Color.Lerp(face, Color.white, .10f);
+            Framed(r, face, Math.Min(15, r.height / 3), 3);
             bool clicked = GUI.Button(r, GUIContent.none, GUIStyle.none);
             if (value.Length > 0)
             {
@@ -270,16 +279,13 @@ namespace ChessCards
             Framed(new Rect(32, noteY, w - 64, portrait ? 58 : 45), RoyalDeep, 13, 2);
             Label(new Rect(48, noteY, w - 96, portrait ? 58 : 45), notice, 20, ink, true);
 
-            float by = portrait ? 1130 : 654, buttonHeight = portrait ? 68 : 54;
+            float by = portrait ? 1130 : 650, buttonHeight = portrait ? 68 : 48;
+            float buttonWidth = portrait ? 512 : 690;
             string play = T("ИГРАТЬ", "PLAY") + (preferences.Selection == ModeSelection.Random ? T("  •  РАНДОМ", "  •  RANDOM") : "");
-            if (Button(new Rect(32, by, portrait ? 420 : 690, buttonHeight), play, Green, true, 27))
+            if (Button(new Rect((w - buttonWidth) / 2, by, buttonWidth, buttonHeight), play, Green, true, 27))
             { PlayFromCourtyard(); GUIUtility.ExitGUI(); }
-            if (Button(new Rect(portrait ? 470 : 1000, by, portrait ? 218 : 248, buttonHeight), T("Правила", "Rules"), Blue))
-            { rulesScroll = new Vector2(); rules = true; }
-            if (portrait)
-                Label(new Rect(32, 1214, w - 64, 33), T("+100 монет за победу", "+100 coins per win"), 20, gold, true, true);
-            else
-                Label(new Rect(736, by, 250, buttonHeight), T("+100 монет за победу", "+100 coins per win"), 18, gold, true, true);
+            Label(new Rect(32, portrait ? 1214 : 703, w - 64, portrait ? 33 : 17),
+                T("+100 монет за победу", "+100 coins per win"), portrait ? 20 : 16, gold, true, true);
         }
 
         void DrawCourtyard(Rect r, bool restored)
@@ -802,12 +808,14 @@ namespace ChessCards
             GUIStyle style = new GUIStyle(text) { fontSize = portrait ? 23 : 21, alignment = TextAnchor.UpperLeft };
             float contentHeight = style.CalcHeight(new GUIContent(content), view.width - 36) + 20;
             historyScroll = GUI.BeginScrollView(view, historyScroll, new Rect(0, 0, view.width - 26, contentHeight));
-            GUI.Label(new Rect(4, 0, view.width - 36, contentHeight), content, style);
+            DrawStaticText(new Rect(4, 0, view.width - 36, contentHeight), content, style);
             GUI.EndScrollView();
             if (Button(new Rect(r.x + 24, r.y + r.height - 80, r.width - 48, 56), T("Вернуться к партии", "Back to game"), Hex("87643B"))) historyOpen = false;
         }
         void DrawRules()
         {
+            if (location || match == null) { rules = false; return; }
+            GameMode mode = match.Mode;
             Rect r = new Rect(24, 24, w - 48, h - 48); Overlay(r, T("Как играть", "How to play"));
             Rect view = new Rect(r.x + 20, r.y + 88, r.width - 40, r.height - 186);
             string content =
@@ -821,7 +829,7 @@ namespace ChessCards
                 "ШАХМАТНЫЕ ОСОБЕННОСТИ\nЕсть рокировка, выбор превращения пешки и взятие на проходе. На проходе можно взять только следующим шахматным перемещением. Карта без перемещения не расходует эту возможность. Короля нельзя брать или оставлять под ударом.\n\n" +
                 "НИЧЬЯ\nПат, два оставшихся короля или 100 перемещений без движения пешек и взятий. Троекратное повторение в этом прототипе не проверяется.\n\n" +
                 "УПРАВЛЕНИЕ\nНажми карту, затем свою фигуру и подсвеченную клетку. Нажми фигуру повторно, чтобы снять выбор. Стрелки перелистывают руку. Правила можно прокручивать. Сохраняются монеты и ремонт; незавершённая партия при закрытии не сохраняется.";
-            if ((!location && match != null ? match.Mode : selectedMode) == GameMode.Checkers)
+            if (mode == GameMode.Checkers)
                 content = "ШАШКИ × КАРТЫ\nРусские шашки на доске 8×8. У каждой стороны по 12 шашек; ходят по тёмным клеткам. Для победы забери все шашки соперника или лиши их допустимых ходов.\n\n" +
                     "ХОДЫ И ВЗЯТИЯ\nПростая шашка ходит на соседнюю диагональную клетку вперёд, а бьёт в обе стороны. Если есть взятие, нужно бить. При нескольких вариантах можно выбрать любой.\n\n" +
                     "СЕРИЯ ВЗЯТИЙ\nПродолжай брать одной и той же шашкой, пока возможны взятия. Вся цепочка считается одним перемещением карты. Подсветка автоматически остаётся на этой шашке. Взятые шашки отмечаются крестиком и снимаются после всей цепочки; повторно брать или перепрыгивать их нельзя.\n\n" +
@@ -830,7 +838,6 @@ namespace ChessCards
                     "СПЕЦИАЛЬНЫЕ КАРТЫ\nОбмен меняет владельцев армий и разворачивает доску. Отмена возвращает последнее завершённое перемещение целиком, включая всю цепочку взятий. Пропуск даёт одно перемещение, затем противник пропускает очередь. У каждой специальной карты есть одно своё перемещение после эффекта.\n\n" +
                     "НИЧЬЯ\nПосле 15 завершённых перемещений дамками каждой стороны без взятия и движения простой шашки. Остальные турнирные ограничения ничьей в прототипе не проверяются.\n\n" +
                     "НАГРАДА И УПРАВЛЕНИЕ\nЗа победу — 100 монет в общий баланс двора. Нажми карту, шашку и подсвеченную клетку. Во время серии выбирай следующую подсвеченную клетку. История показывает карты и перемещения. Партия при закрытии не сохраняется, монеты и ремонт сохраняются.";
-            GameMode mode = location || match == null ? selectedMode : match.Mode;
             if (mode == GameMode.Go)
                 content = "ГО 9×9\nТы начинаешь чёрными. Нажимай на свободные пересечения линий. Камни соединяются по горизонтали и вертикали. Когда у группы противника не остаётся соседних свободных точек, её камни снимаются. Нельзя оставлять свою группу без свободных точек или повторять уже сыгранную позицию.\n\n" +
                     "КАРТЫ\nКарта даёт 1–3 постановки камней. Обмен меняет цвета, отмена возвращает позицию до последней постановки, а пропуск даёт один ход и оставляет очередь у сыгравшего карту. Правила подбора карт по цвету и значению общие.\n\n" +
@@ -843,7 +850,7 @@ namespace ChessCards
             GUIStyle ruleStyle = new GUIStyle(text) { fontSize = portrait ? 23 : 21, alignment = TextAnchor.UpperLeft };
             float contentHeight = ruleStyle.CalcHeight(new GUIContent(content), view.width - 36) + 20;
             rulesScroll = GUI.BeginScrollView(view, rulesScroll, new Rect(0, 0, view.width - 26, contentHeight));
-            GUI.Label(new Rect(4, 0, view.width - 36, contentHeight), content, ruleStyle);
+            DrawStaticText(new Rect(4, 0, view.width - 36, contentHeight), content, ruleStyle);
             GUI.EndScrollView();
             if (Button(new Rect(r.x + 24, r.y + r.height - 80, r.width - 48, 56), T("Понятно", "Done"), Hex("87643B"))) rules = false;
         }
