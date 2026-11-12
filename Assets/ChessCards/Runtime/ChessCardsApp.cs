@@ -16,7 +16,7 @@ namespace ChessCards
         Font font;
         Texture2D[,] pieces = new Texture2D[2, 9];
         readonly Texture2D[] cardFaces = new Texture2D[6];
-        Texture2D cardBody, cardBack;
+        Texture2D cardBody, cardFrame, cardBack;
         GUIStyle text, center, bold;
         bool initialized, location = true, rules, confirmLeave, credited;
         int selected = -1, page;
@@ -39,13 +39,14 @@ namespace ChessCards
         bool portrait;
         float w, h;
         readonly Color background = Hex("200D31"), panel = Hex("492469"), ink = Hex("FFF9F2"), muted = Hex("F0D8FB"), gold = Hex("FFE098");
-        readonly Color[] cardColors = { Hex("C4274E"), Hex("225AC2"), Hex("26872F"), Hex("C87C15") };
+        readonly Color[] cardColors = { Hex("E22E49"), Hex("315DE5"), Hex("24A322"), Hex("E79D23") };
         static Color Hex(string s) { return new Color(Convert.ToInt32(s.Substring(0, 2), 16) / 255f, Convert.ToInt32(s.Substring(2, 2), 16) / 255f, Convert.ToInt32(s.Substring(4, 2), 16) / 255f); }
         void Awake()
         {
             Application.targetFrameRate = 60;
             font = Resources.Load<Font>("ChessCards/UI");
             cardBody = Resources.Load<Texture2D>("ChessCards/Cards/Body");
+            cardFrame = Resources.Load<Texture2D>("ChessCards/Cards/Frame");
             cardBack = Resources.Load<Texture2D>("ChessCards/Cards/Back");
             string[] faces = { "1", "2", "3", "Swap", "Undo", "Skip" };
             for (int i = 0; i < faces.Length; i++)
@@ -661,32 +662,32 @@ namespace ChessCards
         {
             int face = card.Kind == CardKind.Number ? card.Number - 1 : (int)card.Kind + 2;
             Texture2D art = face >= 0 && face < cardFaces.Length ? cardFaces[face] : null;
-            if (cardBody == null || art == null)
+            if (cardBody == null || cardFrame == null || art == null)
             {
                 Fill(r, cardColors[card.Color]);
                 Label(r, card.GetTitle(English), 26, ink, true);
                 return;
             }
             Color old = GUI.color;
-            GUI.color = new Color(0, 0, 0, .26f * opacity);
-            GUI.DrawTexture(new Rect(r.x + 4, r.y + 6, r.width, r.height), cardBody);
-            float edge = highlighted ? 4 : 2;
-            GUI.color = new Color(Trim.r, Trim.g, Trim.b, opacity);
-            GUI.DrawTexture(Inset(r, -edge), cardBody);
+            GUI.color = new Color(.13f, .035f, .10f, .68f * opacity);
+            GUI.DrawTexture(new Rect(r.x + 2, r.y + 4, r.width, r.height), cardBody);
+            if (highlighted)
+            {
+                GUI.color = new Color(TrimLight.r, TrimLight.g, TrimLight.b, opacity);
+                GUI.DrawTexture(Inset(r, -2), cardBody);
+            }
             Color color = cardColors[card.Color];
             GUI.color = new Color(color.r, color.g, color.b, opacity);
             GUI.DrawTexture(r, cardBody);
             GUI.color = new Color(1, 1, 1, opacity);
+            GUI.DrawTexture(r, cardFrame);
             GUI.DrawTexture(r, art);
             GUI.color = old;
-            if (r.width >= 90)
-            {
-                string caption = card.Kind == CardKind.Number
-                    ? (card.Number == 1 ? T("ХОД", "MOVE") : T("ХОДА", "MOVES"))
-                    : card.GetTitle(English);
-                Label(new Rect(r.x + 6, r.y + r.height * .777f, r.width - 12, r.height * .10f),
-                    caption, 12, new Color(ink.r, ink.g, ink.b, opacity), true, true);
-            }
+        }
+        string HandCardCaption(Card card)
+        {
+            if (card.Kind != CardKind.Number) return card.GetTitle(English);
+            return card.Number == 1 ? T("ХОД", "MOVE") : T("ХОДА", "MOVES");
         }
         void DrawCards(float x, float y, float width)
         {
@@ -711,10 +712,13 @@ namespace ChessCards
                 int i = page * 4 + slot; if (i >= count) break;
                 Card card = match.Hands[0][i];
                 bool playable = match.Actor == 0 && match.CanPlay(i);
-                Rect r = new Rect(x + slot * (slotWidth + gap) + (slotWidth - 120) / 2, y + 146, 120, 168);
-                DrawCardFace(r, card, playable, playable ? 1 : .66f);
+                Rect r = new Rect(x + slot * (slotWidth + gap) + (slotWidth - 110) / 2, y + 143, 110, 154);
+                DrawCardFace(r, card, playable, playable ? 1 : .76f);
+                Label(new Rect(r.x, r.y + r.height + 2, r.width, 18),
+                    HandCardCaption(card), 12, playable ? ink : muted, true, true);
+                Rect target = new Rect(r.x, r.y, r.width, r.height + 20);
                 bool old = GUI.enabled; GUI.enabled = old && playable;
-                if (GUI.Button(r, new GUIContent("", match.Actor == 0 ? match.UnavailableReason(i, English) : T("Ход бота", "Bot's turn")), GUIStyle.none))
+                if (GUI.Button(target, new GUIContent("", match.Actor == 0 ? match.UnavailableReason(i, English) : T("Ход бота", "Bot's turn")), GUIStyle.none))
                 { if (match.PlayCard(i)) { AnnounceCard(card, 0); Feedback(clickSound); } selected = -1; selectedMoves.Clear(); illegalGoMove = false; CreditResult(); GUIUtility.ExitGUI(); }
                 GUI.enabled = old;
             }

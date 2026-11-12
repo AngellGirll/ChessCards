@@ -1,1 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="320" height="448" viewBox="0 0 320 448"><rect x="9" y="9" width="302" height="430" rx="21" fill="none" stroke="#FFF3DC" stroke-width="7"/><ellipse cx="160" cy="220" rx="104" ry="128" transform="rotate(23 160 220)" fill="#FFF3DC"/><g transform="translate(47 57)"><text x="0" y="0" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="36" fill="#FFF3DC">2</text></g><g transform="translate(273 391) rotate(180)"><text x="0" y="0" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="36" fill="#FFF3DC">2</text></g><text x="160" y="270" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="143" fill="#273548">2</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="448" viewBox="0 0 320 448">
+<defs>
+    <linearGradient id="ivory" x2=".07" y2="1">
+      <stop stop-color="#fffdf1"/><stop offset=".44" stop-color="#fff5d3"/><stop offset="1" stop-color="#f0c580"/>
+    </linearGradient>
+  </defs>
+
+  <g stroke-linejoin="round" stroke-linecap="round">
+    <g transform="translate(1 11)" fill="#31101d" stroke="#31101d" stroke-width="12" opacity=".49">
+      <text x="159" y="307" text-anchor="middle" font-family="DejaVu Serif" font-size="239" font-weight="700">2</text>
+    </g>
+    <g transform="translate(0 5)" fill="#a45526" stroke="#8d421d" stroke-width="8">
+      <text x="159" y="307" text-anchor="middle" font-family="DejaVu Serif" font-size="239" font-weight="700">2</text>
+    </g>
+    <g fill="url(#ivory)" stroke="#fff6d2" stroke-width="2.5">
+      <text x="159" y="307" text-anchor="middle" font-family="DejaVu Serif" font-size="239" font-weight="700">2</text>
+    </g>
+  </g>
+</svg>

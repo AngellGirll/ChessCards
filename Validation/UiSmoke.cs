@@ -192,8 +192,10 @@ namespace UnityEngine
                 string image="<image x='"+(r.x+ox)+"' y='"+(r.y+oy)+"' width='"+r.width+"' height='"+r.height+"' preserveAspectRatio='"+fit+"' href='"+data+"'/>";
                 if(System.IO.Path.GetFileName(texture.Path)=="Body.png")
                 {
-                    string id="mask"+(clip++);
-                    svg.Append("<defs><mask id='"+id+"'>"+image+"</mask></defs><rect x='"+(r.x+ox)+"' y='"+(r.y+oy)+"' width='"+r.width+"' height='"+r.height+"' fill='"+color.Css()+"' opacity='"+color.a+"' mask='url(#"+id+")'/>");
+                    string id="tint"+(clip++);
+                    string matrix=FormattableString.Invariant($"{color.r} 0 0 0 0  0 {color.g} 0 0 0  0 0 {color.b} 0 0  0 0 0 1 0");
+                    svg.Append("<defs><filter id='"+id+"' color-interpolation-filters='sRGB'><feColorMatrix values='"+matrix+
+                        "'/></filter></defs><g opacity='"+color.a+"' filter='url(#"+id+")'>"+image+"</g>");
                 }
                 else svg.Append("<g opacity='"+color.a+"'>"+image+"</g>");
             }
@@ -511,7 +513,7 @@ static class UiSmoke
         Directory.CreateDirectory("Validation/Previews");
         BotTimingRegression();
         var app=new ChessCardsApp();Call(app,"Awake");
-        Check(Get(app,"cardBody")!=null && Get(app,"cardBack")!=null,"Card body/back resource missing");
+        Check(Get(app,"cardBody")!=null && Get(app,"cardFrame")!=null && Get(app,"cardBack")!=null,"Card artwork resource missing");
         foreach(var face in (UnityEngine.Texture2D[])Get(app,"cardFaces")) Check(face!=null,"Card face resource missing");
         Draw(app,"Validation/Previews/location-landscape.svg");
         UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
@@ -522,6 +524,12 @@ static class UiSmoke
         UnityEngine.GUI.Click(300,520);Draw(app,"Validation/Previews/transition.svg");
         Check(!(bool)Get(app,"location") && ((CardMatch)Get(app,"match")).Mode==GameMode.Chess,"Chess choice failed");
         var match=(CardMatch)Get(app,"match");
+        match.Hands[0].Clear();
+        match.Hands[0].AddRange(new[] { new Card(0,1), new Card(1,2), new Card(2,3), new Card(3,CardKind.Undo) });
+        Draw(app,"Validation/Previews/cards-royal-portrait.svg");
+        UnityEngine.Screen.width=1280;UnityEngine.Screen.height=720;
+        Draw(app,"Validation/Previews/cards-royal-landscape.svg");
+        UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
         match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));
         UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
         Check(match.Phase==MatchPhase.MovePieces,"Card click failed");

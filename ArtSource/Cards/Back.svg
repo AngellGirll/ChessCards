@@ -1,1 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="320" height="448" viewBox="0 0 320 448"><defs><clipPath id="card"><rect x="4" y="4" width="312" height="440" rx="25"/></clipPath></defs><g clip-path="url(#card)"><rect width="320" height="448" fill="#26394E"/><path d="M-280 16 L0 432" stroke="#425B72" stroke-width="2"/><path d="M-250 16 L30 432" stroke="#425B72" stroke-width="2"/><path d="M-220 16 L60 432" stroke="#425B72" stroke-width="2"/><path d="M-190 16 L90 432" stroke="#425B72" stroke-width="2"/><path d="M-160 16 L120 432" stroke="#425B72" stroke-width="2"/><path d="M-130 16 L150 432" stroke="#425B72" stroke-width="2"/><path d="M-100 16 L180 432" stroke="#425B72" stroke-width="2"/><path d="M-70 16 L210 432" stroke="#425B72" stroke-width="2"/><path d="M-40 16 L240 432" stroke="#425B72" stroke-width="2"/><path d="M-10 16 L270 432" stroke="#425B72" stroke-width="2"/><path d="M20 16 L300 432" stroke="#425B72" stroke-width="2"/><path d="M50 16 L330 432" stroke="#425B72" stroke-width="2"/><path d="M80 16 L360 432" stroke="#425B72" stroke-width="2"/><path d="M110 16 L390 432" stroke="#425B72" stroke-width="2"/><path d="M140 16 L420 432" stroke="#425B72" stroke-width="2"/><path d="M170 16 L450 432" stroke="#425B72" stroke-width="2"/><path d="M200 16 L480 432" stroke="#425B72" stroke-width="2"/><path d="M230 16 L510 432" stroke="#425B72" stroke-width="2"/><path d="M260 16 L540 432" stroke="#425B72" stroke-width="2"/><path d="M290 16 L570 432" stroke="#425B72" stroke-width="2"/></g><rect x="9" y="9" width="302" height="430" rx="21" fill="none" stroke="#EBC270" stroke-width="7"/><path d="M160 97 L260 224 L160 351 L60 224 Z" fill="#172535" stroke="#EBC270" stroke-width="3"/><path d="M122 188 L114 151 L143 166 L160 137 L178 166 L207 151 L199 188 Z" fill="#EBC270"/><rect x="122" y="194" width="77" height="8" rx="3" fill="#EBC270"/><text x="160" y="243" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="32" fill="#FFF3DC">CHESS</text><text x="160" y="278" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="25" letter-spacing="4" fill="#EBC270">CARDS</text></svg>
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" width="320" height="448" viewBox="0 0 320 448">
+<defs>
+    <linearGradient id="metal" x1="0" y1="0" x2=".17" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#fff7b2"/><stop offset=".18" stop-color="#ffde74"/>
+      <stop offset=".47" stop-color="#eea121"/><stop offset=".68" stop-color="#bf6a0c"/>
+      <stop offset=".89" stop-color="#f1a519"/><stop offset="1" stop-color="#ffe891"/>
+    </linearGradient>
+    <linearGradient id="wire" x2="0" y2="1">
+      <stop stop-color="#fff3b7"/><stop offset=".62" stop-color="#ffc14c"/><stop offset="1" stop-color="#ffde79"/>
+    </linearGradient>
+    <g id="corner">
+      <path d="M40 94c0-14 5-28 14-35 8-6 17-6 22 0 4 5 3 12-1 15-3 2-7 1-9-2-3-4-1-8 2-9-8-2-17 8-22 19 3-2 8-3 12-1M40 94c-4-13-1-35 10-47 11-12 31-14 44-10 9 3 13 9 11 15-1 6-6 8-11 6-5-2-6-7-3-11" fill="none" stroke="#6f320b" stroke-opacity=".60" stroke-width="6.5" stroke-linecap="round"/>
+      <path d="M40 92c0-14 5-28 14-35 8-6 17-6 22 0 4 5 3 12-1 15-3 2-7 1-9-2-3-4-1-8 2-9-8-2-17 8-22 19 3-2 8-3 12-1M40 92c-4-13-1-35 10-47 11-12 31-14 44-10 9 3 13 9 11 15-1 6-6 8-11 6-5-2-6-7-3-11" fill="none" stroke="url(#wire)" stroke-width="4.3" stroke-linecap="round"/>
+      <path d="m48 53 3-8 8-3-3 8Zm-5 23c9-8 14-9 19-6-2 6-8 10-19 10Z" fill="#ffdf79"/>
+    </g>
+  </defs>
+  <defs>
+    <linearGradient id="blue" x2=".15" y2="1">
+      <stop stop-color="#396df1"/><stop offset=".55" stop-color="#233fab"/><stop offset="1" stop-color="#181c70"/>
+    </linearGradient>
+    <pattern id="diamond" width="58" height="58" patternUnits="userSpaceOnUse">
+      <path d="M29 7 46 29 29 51 12 29Z" fill="none" stroke="#e5c0ff" stroke-width="2" opacity=".17"/>
+    </pattern>
+  </defs>
+  <rect x="2" y="2" width="316" height="444" rx="42" fill="url(#blue)"/>
+  <rect x="22" y="22" width="276" height="404" rx="28" fill="url(#diamond)"/>
+  <path d="M160 111 259 223 160 335 61 223Z" fill="#1c287e" stroke="url(#wire)" stroke-width="5"/>
+  <path d="m94 189 28 17 38-45 38 45 28-17-17 67h-98Zm23 78h86v13h-86Z" fill="url(#metal)" stroke="#fff2a5" stroke-width="3" stroke-linejoin="round"/>
+
+  <rect x="4" y="4" width="312" height="440" rx="41" fill="none" stroke="#74310e" stroke-width="7"/>
+  <rect x="10" y="10" width="300" height="428" rx="36" fill="none" stroke="url(#metal)" stroke-width="15"/>
+  <rect x="8" y="8" width="304" height="432" rx="37" fill="none" stroke="#fff3af" stroke-opacity=".86" stroke-width="3"/>
+  <rect x="19" y="19" width="282" height="410" rx="30" fill="none" stroke="#7a360b" stroke-opacity=".66" stroke-width="3"/>
+  <rect x="25" y="25" width="270" height="398" rx="26" fill="none" stroke="url(#wire)" stroke-width="2.6"/>
+  <use xlink:href="#corner"/><use xlink:href="#corner" transform="translate(320) scale(-1 1)"/>
+  <use xlink:href="#corner" transform="translate(0 448) scale(1 -1)"/>
+  <use xlink:href="#corner" transform="translate(320 448) scale(-1 -1)"/>
+</svg>

@@ -1,1 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="320" height="448" viewBox="0 0 320 448"><rect x="4" y="4" width="312" height="440" rx="25" fill="white"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="448" viewBox="0 0 320 448">
+<defs>
+    <linearGradient id="enamel" x1="0" y1="0" x2=".22" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#ffffff"/><stop offset=".28" stop-color="#eeeeee"/>
+      <stop offset=".69" stop-color="#bdbdbd"/><stop offset="1" stop-color="#929292"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".32" cy=".15" r=".73">
+      <stop stop-color="#fff" stop-opacity=".20"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="2" y="2" width="316" height="444" rx="43" fill="url(#enamel)"/>
+  <rect x="2" y="2" width="316" height="444" rx="43" fill="url(#glow)"/>
+  <path d="M27 99C102 43 215 30 295 69v48C201 84 104 102 27 149Z" fill="#fff" opacity=".09"/>
+</svg>
