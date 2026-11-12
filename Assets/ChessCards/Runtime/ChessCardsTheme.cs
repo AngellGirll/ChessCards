@@ -21,6 +21,22 @@ namespace ChessCards
         [Range(0, 18)] public float HandLift = 17;
         [Range(.55f, .95f)] public float HandSpacing = .82f;
 
+        [Header("Match table")]
+        [Tooltip("Optional textures. Empty fields use procedural velvet and wood.")]
+        public Texture2D MatchClothTexture;
+        public Texture2D MatchWoodTexture;
+        public Color MatchVelvet = new Color32(92, 19, 43, 255);
+        public Color MatchWood = new Color32(136, 67, 30, 255);
+        public Color MatchBurgundy = new Color32(100, 25, 47, 255);
+        public Color MatchDisabled = new Color32(112, 77, 61, 255);
+        [Range(0, 1)] public float MatchBackdropShade = .18f;
+        [Range(4, 24)] public float TableRim = 12;
+        [Range(8, 48)] public float TableCornerRadius = 32;
+        [Range(80, 220)] public float HandCardHeight = 154;
+        [Range(14, 32)] public int MatchLabelSize = 22;
+        [Range(20, 40)] public int MatchTitleSize = 32;
+        public bool MatchOrnaments = true;
+
         [Header("Cards and pieces")]
         public Texture2D CardBody;
         public Texture2D CardFrame;

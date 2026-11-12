@@ -48,36 +48,54 @@ MonoBehaviour:
   PreviewMode: 0
   ThemeOverride: {fileID: 0}
   Placements:
+  - Block: 17
+    Landscape: {serializedVersion: 2, x: 34, y: 105, width: 1212, height: 590}
+    Portrait: {serializedVersion: 2, x: 28, y: 88, width: 664, height: 1170}
   - Block: 0
-    Landscape: {serializedVersion: 2, x: 167, y: 20, width: 580, height: 55}
+    Landscape: {serializedVersion: 2, x: 334, y: 23, width: 514, height: 55}
     Portrait: {serializedVersion: 2, x: 167, y: 20, width: 195, height: 55}
   - Block: 1
-    Landscape: {serializedVersion: 2, x: 1155, y: 22, width: 97, height: 52}
+    Landscape: {serializedVersion: 2, x: 1174, y: 22, width: 72, height: 52}
     Portrait: {serializedVersion: 2, x: 595, y: 22, width: 97, height: 52}
-  - Block: 7
-    Landscape: {serializedVersion: 2, x: 590, y: 508, width: 650, height: 70}
-    Portrait: {serializedVersion: 2, x: 32, y: 1126, width: 656, height: 64}
-  - Block: 8
-    Landscape: {serializedVersion: 2, x: 48, y: 190, width: 496, height: 496}
-    Portrait: {serializedVersion: 2, x: 80, y: 210, width: 560, height: 560}
-  - Block: 9
-    Landscape: {serializedVersion: 2, x: 590, y: 180, width: 650, height: 321}
-    Portrait: {serializedVersion: 2, x: 32, y: 802, width: 656, height: 321}
-  - Block: 10
-    Landscape: {serializedVersion: 2, x: 28, y: 90, width: 1224, height: 62}
-    Portrait: {serializedVersion: 2, x: 28, y: 90, width: 664, height: 100}
   - Block: 11
-    Landscape: {serializedVersion: 2, x: 28, y: 22, width: 124, height: 52}
+    Landscape: {serializedVersion: 2, x: 36, y: 22, width: 166, height: 52}
     Portrait: {serializedVersion: 2, x: 28, y: 22, width: 124, height: 52}
   - Block: 12
-    Landscape: {serializedVersion: 2, x: 933, y: 22, width: 100, height: 52}
+    Landscape: {serializedVersion: 2, x: 925, y: 22, width: 112, height: 52}
     Portrait: {serializedVersion: 2, x: 373, y: 22, width: 100, height: 52}
   - Block: 13
-    Landscape: {serializedVersion: 2, x: 1044, y: 22, width: 100, height: 52}
+    Landscape: {serializedVersion: 2, x: 1049, y: 22, width: 112, height: 52}
     Portrait: {serializedVersion: 2, x: 484, y: 22, width: 100, height: 52}
+  - Block: 8
+    Landscape: {serializedVersion: 2, x: 84, y: 136, width: 488, height: 488}
+    Portrait: {serializedVersion: 2, x: 80, y: 210, width: 560, height: 560}
+  - Block: 10
+    Landscape: {serializedVersion: 2, x: 662, y: 128, width: 538, height: 70}
+    Portrait: {serializedVersion: 2, x: 66, y: 108, width: 588, height: 72}
+  - Block: 18
+    Landscape: {serializedVersion: 2, x: 660, y: 216, width: 170, height: 154}
+    Portrait: {serializedVersion: 2, x: 91, y: 838, width: 150, height: 116}
+  - Block: 19
+    Landscape: {serializedVersion: 2, x: 850, y: 216, width: 170, height: 154}
+    Portrait: {serializedVersion: 2, x: 285, y: 838, width: 150, height: 116}
+  - Block: 20
+    Landscape: {serializedVersion: 2, x: 1040, y: 216, width: 170, height: 154}
+    Portrait: {serializedVersion: 2, x: 479, y: 838, width: 150, height: 116}
+  - Block: 9
+    Landscape: {serializedVersion: 2, x: 640, y: 386, width: 580, height: 202}
+    Portrait: {serializedVersion: 2, x: 52, y: 961, width: 616, height: 169}
+  - Block: 21
+    Landscape: {serializedVersion: 2, x: 102, y: 654, width: 452, height: 32}
+    Portrait: {serializedVersion: 2, x: 80, y: 800, width: 560, height: 32}
+  - Block: 7
+    Landscape: {serializedVersion: 2, x: 650, y: 594, width: 560, height: 43}
+    Portrait: {serializedVersion: 2, x: 52, y: 1141, width: 616, height: 48}
   - Block: 14
-    Landscape: {serializedVersion: 2, x: 590, y: 650, width: 650, height: 54}
-    Portrait: {serializedVersion: 2, x: 32, y: 1200, width: 656, height: 54}
+    Landscape: {serializedVersion: 2, x: 700, y: 648, width: 460, height: 50}
+    Portrait: {serializedVersion: 2, x: 52, y: 1200, width: 616, height: 48}
+  - Block: 22
+    Landscape: {serializedVersion: 2, x: 644, y: 236, width: 570, height: 320}
+    Portrait: {serializedVersion: 2, x: 62, y: 858, width: 596, height: 280}
   - Block: 16
     Landscape: {serializedVersion: 2, x: 300, y: 36, width: 680, height: 648}
     Portrait: {serializedVersion: 2, x: 32, y: 285, width: 656, height: 710}

@@ -418,7 +418,7 @@ static class UiSmoke
         UnityEngine.Screen.width=1280;UnityEngine.Screen.height=720;
         Draw(app,"Validation/Previews/go-landscape.svg");
         UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
-        UnityEngine.GUI.Click(370,1220);Draw(app,"Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(550,1220);Draw(app,"Validation/Previews/transition.svg");
         Check(match.Actor==1 && match.Go.LastPass==Side.Black,"Go pass button hands over");
         for (int point=0;point<12;point++) Check(match.Go.Place(Side.White,point,out _),"Go bot pass fixture");
         match.Go.Pass(Side.Black);
@@ -524,11 +524,11 @@ static class UiSmoke
         Check(match.Mode == GameMode.Domino && !(bool)Get(app, "portrait"), "Landscape mode choice");
         match.Hands[0].Clear();
         match.Hands[0].Add(new Card(match.Top.Color, 1));
-        PlayOnlyHandCard(app, 915, 390);
+        PlayOnlyHandCard(app, 930, 490);
         Check(match.Phase == MatchPhase.MovePieces, "Landscape card hitbox");
-        UnityEngine.GUI.Click(95, 565); Draw(app, "Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(130, 510); Draw(app, "Validation/Previews/transition.svg");
         Check((int)Get(app, "selected") == 0, "Landscape rack hitbox");
-        UnityEngine.GUI.Click(174, 443); Draw(app, "Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(210, 390); Draw(app, "Validation/Previews/transition.svg");
         Check(match.Domino.Chain.Count == 1, "Landscape domino placement");
         Console.WriteLine("PASS horizontal play, mode selection, card input and board actions");
     }
@@ -692,6 +692,80 @@ static class UiSmoke
         }
     }
 
+    static void MatchPrefabSmoke()
+    {
+        // Read the shipped prefab rather than only exercising fallback coordinates.
+        string yaml = File.ReadAllText("Assets/ChessCards/Prefabs/Match Layout.prefab");
+        var entries = System.Text.RegularExpressions.Regex.Matches(yaml,
+            @"- Block: (\d+)\s+Landscape: \{serializedVersion: 2, x: ([\d.]+), y: ([\d.]+), width: ([\d.]+), height: ([\d.]+)\}\s+Portrait: \{serializedVersion: 2, x: ([\d.]+), y: ([\d.]+), width: ([\d.]+), height: ([\d.]+)\}");
+        var layout = new ChessCardsScreen { Kind = ScreenKind.Match, Placements = new ScreenPlacement[entries.Count] };
+        for (int i = 0; i < entries.Count; i++)
+        {
+            var g = entries[i].Groups;
+            float N(int j) => float.Parse(g[j].Value, System.Globalization.CultureInfo.InvariantCulture);
+            layout.Placements[i] = new ScreenPlacement { Block = (ScreenBlock)int.Parse(g[1].Value),
+                Landscape = new UnityEngine.Rect(N(2), N(3), N(4), N(5)),
+                Portrait = new UnityEngine.Rect(N(6), N(7), N(8), N(9)) };
+        }
+        Check(layout.Placements.Length >= 16, "Match prefab contains editable table, piles, hand and scoring regions");
+        var app = new ChessCardsApp(); Call(app, "Awake"); Set(app, "screen", layout); Set(app, "location", false);
+        foreach (bool portrait in new[] { false, true })
+        {
+            UnityEngine.Screen.width = portrait ? 720 : 1280; UnityEngine.Screen.height = portrait ? 1280 : 720;
+            foreach (var placement in layout.Placements)
+            {
+                var r = portrait ? placement.Portrait : placement.Landscape;
+                Check(r.x >= 0 && r.y >= 0 && r.x + r.width <= UnityEngine.Screen.width &&
+                    r.y + r.height <= UnityEngine.Screen.height, "Prefab block stays on design surface: " + placement.Block);
+            }
+            foreach (GameMode mode in Enum.GetValues(typeof(GameMode)))
+            {
+                var match = new CardMatch(17, mode: mode);
+                Set(app, "match", match); Call(app, "ResetHandSelection");
+                match.Hands[0].Clear();
+                match.Hands[0].AddRange(new[] { new Card(1, 1), new Card(1, 3), new Card(1, CardKind.Undo),
+                    new Card(match.Top.Color, 1), new Card(2, 2) });
+                string path = "Validation/Previews/match-prefab-" + mode + (portrait ? "-portrait.svg" : "-landscape.svg");
+                UnityEngine.GUI.Hover(-1, -1); Draw(app, path);
+                var hand = layout.GetRect(ScreenBlock.Cards, portrait, default);
+                var slots = (List<UnityEngine.Rect>)Get(app, "handSlots");
+                Check(slots.Count == 5, "Prefab displays the whole hand");
+                foreach (var slot in slots)
+                    Check(slot.x >= hand.x && slot.y >= hand.y && slot.x + slot.width <= hand.x + hand.width + .01f &&
+                        slot.y + slot.height <= hand.y + hand.height, "Hand fits the editable prefab bounds");
+                var picked = slots[3];
+                UnityEngine.GUI.Click(picked.x + 5, picked.y + 40); Draw(app, path);
+                Check((int)Get(app, "selectedHandCard") == 3, "Prefab card hit target selects the visible card");
+                UnityEngine.GUI.Hover(-1, -1);
+                for (int frame = 0; frame < 9; frame++) Draw(app, path);
+                Set(app, "settingsOpen", true);
+                string blocked = HoverFrame(app, picked.x + 5, picked.y + 40);
+                Check(blocked.Contains("Настройки"), "Match settings render over the table");
+                Set(app, "settingsOpen", false);
+            }
+        }
+
+        // Editing the same prefab's hand and action placements moves actual hit targets.
+        UnityEngine.Screen.width = 1280; UnityEngine.Screen.height = 720;
+        foreach (var placement in layout.Placements)
+        {
+            if (placement.Block == ScreenBlock.Cards) placement.Landscape = new UnityEngine.Rect(640, 395, 540, 166);
+            if (placement.Block == ScreenBlock.Actions) placement.Landscape = new UnityEngine.Rect(760, 646, 300, 44);
+        }
+        var edited = new CardMatch(19); Set(app, "match", edited); Call(app, "ResetHandSelection");
+        edited.Hands[0].Clear(); edited.Hands[0].Add(new Card(edited.Top.Color, 1));
+        Draw(app, "Validation/Previews/match-edited.svg");
+        var moved = ((List<UnityEngine.Rect>)Get(app, "handSlots"))[0];
+        Check(moved.height < 140, "Resizing the prefab hand changes card height");
+        PlayOnlyHandCard(app, moved.x + moved.width / 2, moved.y + moved.height / 2);
+        Check(edited.Phase == MatchPhase.MovePieces, "Resized hand still plays a card");
+        edited = new CardMatch(21); Set(app, "match", edited); Call(app, "ResetHandSelection");
+        edited.Hands[0].Clear(); int deck = edited.DeckCount;
+        UnityEngine.GUI.Click(800, 665); Draw(app, "Validation/Previews/transition.svg");
+        Check(edited.DeckCount == deck - 1, "Moving draw button in prefab moves the live action");
+        Console.WriteLine("PASS serialized match prefab in all four modes and orientations, editable hand bounds and relocated action input");
+    }
+
     static void SettingsSmoke()
     {
         UnityEngine.Screen.width = 720; UnityEngine.Screen.height = 1280;
@@ -811,6 +885,7 @@ static class UiSmoke
         HoverAndRulesSmoke();
         PortraitCourtyardRepair();
         ConfiguredSceneFlow();
+        MatchPrefabSmoke();
         SettingsSmoke();
         Console.WriteLine("PASS runtime source compilation against isolated adapter; GUI clicks, card selection, board input, mate reward, repair and save/reload");
         Console.WriteLine("Layout previews emitted. This does not replace testing in Unity Editor or a device build.");

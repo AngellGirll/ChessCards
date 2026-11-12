@@ -75,3 +75,13 @@ dotnet run --project Validation/UiSmoke.csproj -c Release
 Прошли 17 360 проверок общей логики: прежние шахматные сценарии и perft до глубины 4, новые шашечные позиции, карты и окончания, 8 завершённых шахматных партий ботов и 8 завершённых шашечных партий. В шашечных симуляциях выполнено 976 действий.
 
 Отдельно прошли проверки экрана выбора, возврата без старта партии, запуска каждого режима, загрузки четырёх шашечных изображений, нажатия шашки и клетки, автоматического выбора продолжения взятия, правил и повторной партии в том же режиме. Макеты портретного и альбомного экранов просмотрены через адаптер. Настоящий Unity Editor и сборки на устройствах здесь по-прежнему не запускались.
+
+
+## Editable royal match table
+
+- The existing Match Layout prefab and its scene references are reused. New placement enum values are appended to preserve serialized values.
+- Runtime sources compile against the isolated .NET UI adapter. The UI suite parses the shipped prefab and renders all four game modes in portrait and landscape, exercises card selection, moves/resizes the hand and draw control, and verifies the relocated hit targets.
+- Existing input checks cover chess, checkers capture chains, Go passing/scoring/resuming, domino controls, card confirmation, 40-card hands, modal blocking, bot preview/pacing, RU/EN, settings, replay and scene transitions.
+- Core suite: 24,951 assertions passed. Unity structure/GUID validation passed.
+- SVG layout previews are emitted under Validation/Previews. The adapter approximates Unity fonts, gradients and textures; these are not Unity screenshots.
+- Unity Editor is unavailable in this environment. Actual import, native IMGUI rendering, Inspector interaction, device safe areas and WebGL builds still need a check in Unity.

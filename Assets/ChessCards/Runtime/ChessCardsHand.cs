@@ -23,7 +23,9 @@ namespace ChessCards
             handSlots.Clear();
             int rows = count > 36 ? 3 : count > 16 ? 2 : 1;
             int perRow = (count + rows - 1) / rows;
-            float cardHeight = rows == 1 ? 148 : area.height / rows + 24;
+            float maxHeight = Math.Max(20, Math.Min(ActiveTheme?.HandCardHeight ?? 154, area.height));
+            float cardHeight = rows == 1 ? maxHeight : Math.Min(maxHeight, area.height / rows + 24);
+            cardHeight = Math.Min(cardHeight, area.width * 1.4f);
             float cardWidth = cardHeight / 1.4f;
             float rowStep = rows == 1 ? 0 : (area.height - cardHeight) / (rows - 1);
             float spacing = Math.Max(.55f, Math.Min(.95f, ActiveTheme?.HandSpacing ?? .82f));
@@ -46,20 +48,25 @@ namespace ChessCards
             return -1;
         }
 
-        void DrawHand(float x, float y, float width)
+        void DrawHand(Rect area)
         {
             int count = match.Hands[0].Count;
-            Label(new Rect(x + 14, y + 101, 191, 31), T("Твоя рука: ", "Your hand: ") + count, 19, muted);
+            float heading = Math.Min(32, area.height * .18f);
+            float caption = 17;
+            Rect slotsArea = new Rect(area.x + 6, area.y + heading + HandLift, area.width - 12,
+                Math.Max(20, area.height - heading - HandLift - caption));
+            YardText(new Rect(area.x, area.y, area.width, heading), T("Твоя рука · ", "Your hand · ") + count,
+                MatchLabelSize, ink, true);
             if (count == 0)
             {
                 ResetHandSelection();
-                Label(new Rect(x, y + 152, width, 150), T("Рука пуста. В свою очередь возьми карту.", "Your hand is empty. Draw a card on your turn."), 22, muted, true);
+                Label(slotsArea, T("Рука пуста. В свою очередь возьми карту.", "Your hand is empty. Draw a card on your turn."), 22, muted, true);
                 return;
             }
 
             if (selectedHandCard >= count || frontHandCard >= count) ResetHandSelection();
             if (handLifts.Length < count) Array.Resize(ref handLifts, count);
-            int rows = LayoutHand(new Rect(x + 15, y + 151, width - 30, 149), count);
+            int rows = LayoutHand(slotsArea, count);
             Vector2 pointer = Event.current.mousePosition;
             int pointed = GUI.enabled ? HandCardAt(pointer) : -1;
             if (pointed < 0 && GUI.enabled && frontHandCard >= 0 && LiftedHandCard(frontHandCard).Contains(pointer))
@@ -79,21 +86,7 @@ namespace ChessCards
                 if (i != focused) DrawHandCard(i, canChoose && match.CanPlay(i), dense, false);
             if (focused >= 0) DrawHandCard(focused, canChoose && match.CanPlay(focused), dense, true);
 
-            if (selectedHandCard >= 0)
-            {
-                string hint = match.Actor != 0 ? T("Ход бота", "Bot's turn") :
-                    match.UnavailableReason(selectedHandCard, English);
-                if (hint.Length == 0) hint = T("Нажми ещё раз, чтобы сыграть", "Press again to play");
-                Label(new Rect(x + 195, y + 101, width - 209, 30), hint, 15, gold, true);
-            }
-            else if (focused >= 0 && dense)
-            {
-                Card card = match.Hands[0][focused];
-                Label(new Rect(x + 195, y + 101, width - 209, 30),
-                    card.GetColorName(English) + " «" + card.GetTitle(English) + "»", 16, gold, true);
-            }
-
-            if (GUI.Button(new Rect(x + 15, y + 132, width - 30, 174), GUIContent.none, GUIStyle.none))
+            if (GUI.Button(new Rect(area.x, area.y + heading, area.width, area.height - heading), GUIContent.none, GUIStyle.none))
             {
                 int hit = frontHandCard >= 0 && LiftedHandCard(frontHandCard).Contains(pointer) ? frontHandCard : pointed;
                 if (hit >= 0) ChooseHandCard(hit, canChoose);

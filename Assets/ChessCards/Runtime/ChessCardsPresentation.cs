@@ -97,6 +97,7 @@ namespace ChessCards
             chessPieces = config != null ? config.ChessPiecesAtlas : Resources.Load<Texture2D>(royalArt + "ChessPieces");
             ApplyPalette(config);
             LoadCourtyardStyle(royalArt, config);
+            LoadMatchStyle(config);
             AudioClip music = Artwork(config?.Music, royalArt + "CourtyardMusic");
             if (musicSource.clip != music)
             {
@@ -286,7 +287,10 @@ namespace ChessCards
 
         void BoardFrame(Rect board)
         {
-            Framed(Inset(board, -13), Amber, 20, 6);
+            Rect rim = Inset(board, -13);
+            Framed(rim, ActiveTheme?.MatchWood ?? Hex("88431E"), 15, 4);
+            Rounded(Inset(rim, 5), Color.white, 10, ActiveTheme?.MatchWoodTexture ?? matchWood);
+            Rounded(Inset(board, -5), TrimLight, 3);
             Fill(Inset(board, -2), Hex("713419"));
         }
 

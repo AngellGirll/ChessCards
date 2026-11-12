@@ -22,6 +22,19 @@ MonoBehaviour:
   RestorationTitleEn: Restoration
   HandLift: 17
   HandSpacing: 0.82
+  MatchClothTexture: {fileID: 0}
+  MatchWoodTexture: {fileID: 0}
+  MatchVelvet: {r: 0.3607843, g: 0.0745098, b: 0.1686275, a: 1}
+  MatchWood: {r: 0.5333333, g: 0.2627451, b: 0.1176471, a: 1}
+  MatchBurgundy: {r: 0.3921569, g: 0.0980392, b: 0.1843137, a: 1}
+  MatchDisabled: {r: 0.4392157, g: 0.3019608, b: 0.2392157, a: 1}
+  MatchBackdropShade: 0.18
+  TableRim: 12
+  TableCornerRadius: 32
+  HandCardHeight: 154
+  MatchLabelSize: 22
+  MatchTitleSize: 32
+  MatchOrnaments: 1
   CardBody: {fileID: 2800000, guid: 2dcd78735ed95883988522415ed16ad7, type: 3}
   CardFrame: {fileID: 2800000, guid: b25668ec86034cff81afac012517d38c, type: 3}
   CardBack: {fileID: 2800000, guid: 258d22ac4c64593b98e2c92cd1ffa7d2, type: 3}

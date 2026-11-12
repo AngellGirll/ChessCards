@@ -29,7 +29,7 @@ namespace ChessCards
             portrait = nextPortrait;
             var layers = ((ChessCardsScreen)target).Kind == ScreenKind.Courtyard
                 ? new[] { "Screen", "Settings", "Mode picker" }
-                : new[] { "Screen", "Settings" };
+                : new[] { "Screen", "Settings", "Go scoring" };
             int nextLayer = EditorGUILayout.Popup("Preview layer", Mathf.Min(layer, layers.Length - 1), layers);
             if (nextLayer != layer) selected = -1;
             layer = nextLayer;
@@ -85,8 +85,7 @@ namespace ChessCards
                     if (resizing)
                     {
                         edited.width = Mathf.Clamp(dragOrigin.width + delta.x, 20, designWidth - dragOrigin.x);
-                        if (PlacementKind(placements, selected) != ScreenBlock.Cards)
-                            edited.height = Mathf.Clamp(dragOrigin.height + delta.y, 20, designHeight - dragOrigin.y);
+                        edited.height = Mathf.Clamp(dragOrigin.height + delta.y, 20, designHeight - dragOrigin.y);
                     }
                     else
                     {
@@ -114,8 +113,11 @@ namespace ChessCards
         bool Visible(ScreenBlock block)
         {
             if (layer == 1) return block == ScreenBlock.SettingsWindow;
-            if (layer == 2) return block == ScreenBlock.ModePicker;
-            return block != ScreenBlock.SettingsWindow && block != ScreenBlock.ModePicker;
+            bool match = ((ChessCardsScreen)target).Kind == ScreenKind.Match;
+            if (layer == 2) return match
+                ? block == ScreenBlock.Scoring || block == ScreenBlock.Actions
+                : block == ScreenBlock.ModePicker;
+            return block != ScreenBlock.SettingsWindow && block != ScreenBlock.ModePicker && block != ScreenBlock.Scoring;
         }
 
         SerializedProperty PlacementRect(SerializedProperty placements, int index)

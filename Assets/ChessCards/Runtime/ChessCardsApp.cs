@@ -184,7 +184,7 @@ namespace ChessCards
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(new Vector3(ox, oy, 0), Quaternion.identity, new Vector3(scale, scale, 1));
             bool blocked = sceneTransition || settingsOpen || modeSelection || rules || historyOpen || confirmLeave || promotions != null;
-            if (!location) Backdrop(gameRoom, .63f);
+            if (!location) Backdrop(gameRoom, ActiveTheme?.MatchBackdropShade ?? .18f);
             GUI.enabled = !blocked;
             if (location) DrawLocation(); else DrawMatch();
             GUI.enabled = true;
@@ -235,100 +235,16 @@ namespace ChessCards
             return clicked;
         }
 
-        string MatchStatus()
+        void DrawGoScoring(Rect area)
         {
-            if (match.Phase == MatchPhase.GoScoring) return T("Подсчёт очков", "Scoring");
-            if (match.Phase == MatchPhase.Finished) return match.GetResult(English);
-
-            string turn = match.Actor == 0 ? T("Твоя очередь", "Your turn") : T("Ход бота", "Bot's turn");
-            string action = T("перемещений: ", "moves left: ") + match.Remaining;
-            if (match.Phase == MatchPhase.ChooseCard) action = T("выбор карты", "choose a card");
-            else if (match.Board != null && match.Board.ForcedCaptureFrom >= 0)
-                action = T("продолжи взятие", "continue capturing");
-            return turn + "  •  " + action;
-        }
-
-        void DrawMatch()
-        {
-            if (match == null) { ReturnToCourtyard(); return; }
-            if (Button(Region(ScreenBlock.Back, new Rect(28, 22, 124, 52)), T("Во двор", "Courtyard"), Royal, true, 18)) confirmLeave = true;
-            Banner(Region(ScreenBlock.Title, new Rect(167, 20, portrait ? 195 : 580, 55)), ModeTitle(match.Mode) + (portrait ? "" : T(" × КАРТЫ", " × CARDS")), portrait ? 22 : 31);
-            if (Button(Region(ScreenBlock.History, new Rect(w - 347, 22, 100, 52)), T("История", "History"), Blue, true, 18)) historyOpen = true;
-            if (Button(Region(ScreenBlock.Rules, new Rect(w - 236, 22, 100, 52)), T("Правила", "Rules"), Blue, true, 18)) { rulesScroll = new Vector2(); rules = true; }
-            if (Button(Region(ScreenBlock.Settings, new Rect(w - 125, 22, 97, 52)), "⚙", Royal, true, 28)) settingsOpen = true;
-            Rect status = Region(ScreenBlock.MatchStatus, new Rect(28, 90, w - 56, portrait ? 100 : 62));
-            Framed(status, RoyalDeep, 14, 3);
-            string side = match.HumanSide == Side.White ? T("белые", "White") : T("чёрные", "Black");
-            string phase = MatchStatus();
-            Label(new Rect(status.x + 14, status.y + 4, status.width - 28, status.height * .48f), phase, portrait ? 23 : 24, match.Actor == 0 ? gold : ink, false, true);
-            string playerInfo = match.Domino == null ? T("Ты: ", "You: ") + side : T("Костяшек у бота: ", "Bot tiles: ") + match.Domino.Rack(match.SideFor(1)).Count;
-            Label(new Rect(status.x + 14, status.y + status.height * .52f, status.width - 28, status.height * .43f), playerInfo + T("  •  Очередь №", "  •  Turn #") + match.Turn + T("  •  Карт у бота: ", "  •  Bot cards: ") + match.Hands[1].Count, portrait ? 20 : 18, muted);
-            float size = portrait ? 560 : 496;
-            Rect board = Region(ScreenBlock.Board, new Rect(portrait ? 80 : 48, portrait ? 210 : 190, size, size));
-            board.width = board.height = Math.Min(board.width, board.height);
-            if (match.Go != null) DrawGoBoard(board);
-            else if (match.Domino != null) DrawDominoBoard(board);
-            else DrawBoard(board);
-            Rect cards = Region(ScreenBlock.Cards, new Rect(portrait ? 32 : 590, portrait ? 802 : 180, portrait ? 656 : 650, 321));
-            float right = cards.x, top = cards.y, width = cards.width;
-            if (match.Phase == MatchPhase.GoScoring)
-            {
-                DrawGoScoring(right, top, width);
-                return;
-            }
-            DrawCards(right, top, width);
-            Rect messageArea = Region(ScreenBlock.Notice, new Rect(right, portrait ? 1126 : 508, width, portrait ? 64 : 70));
-            if (match.Phase == MatchPhase.Finished && portrait) messageArea.height = Math.Min(30, messageArea.height);
-            bool announcing = !illegalGoMove && match.Phase != MatchPhase.Finished && Time.unscaledTime < cardAnnouncementUntil && announcedCard.HasValue;
-            if (announcing)
-            {
-                Card card = announcedCard.Value;
-                Framed(messageArea, cardColors[card.Color], 12, 2);
-                Label(new Rect(messageArea.x + 12, messageArea.y + 4, messageArea.width - 24, messageArea.height - 8), AnnouncementText(card), 20, ink);
-            }
-            else
-            {
-                Framed(messageArea, RoyalDeep, 10, 2);
-                string message = illegalGoMove ? T("Ход оставляет группу без свободных точек или повторяет позицию.", "This move leaves a group without liberties or repeats the position.") : match.GetMessage(English);
-                Label(new Rect(messageArea.x + 12, messageArea.y, messageArea.width - 24, messageArea.height), message, 19, ink);
-            }
-            Rect actions = Region(ScreenBlock.Actions, new Rect(right, portrait ? 1200 : 650, width, 54));
-            if (match.Phase == MatchPhase.Finished)
-            {
-                Label(new Rect(right, portrait ? 1160 : 594, width, 32), match.Winner == 0 ? "+" + WinReward + T(" монет зачислено", " coins awarded") : T("Можно попробовать ещё раз", "Play another round"), 22, gold, true);
-                if (Button(new Rect(actions.x, actions.y, actions.width * .56f, actions.height), T("Вернуться во двор", "Return to courtyard"), Hex("87643B"))) { ReturnToCourtyard(); GUIUtility.ExitGUI(); }
-                if (Button(new Rect(actions.x + actions.width * .59f, actions.y, actions.width * .41f, actions.height), T("Ещё партия", "Play again"))) { Replay(); GUIUtility.ExitGUI(); }
-            }
-            else
-            {
-                bool canDraw = match.Actor == 0 && match.Phase == MatchPhase.ChooseCard && match.PlayableCards().Count == 0;
-                float drawWidth = match.Go == null ? actions.width * .56f : actions.width * .38f;
-                if (Button(new Rect(actions.x, actions.y, drawWidth, actions.height), T("Взять карту", "Draw a card"), Green, canDraw))
-                { match.Draw(); ResetHandSelection(); selected = -1; illegalGoMove = false; CreditResult(); GUIUtility.ExitGUI(); }
-                if (match.Go != null && Button(new Rect(actions.x + actions.width * .41f, actions.y, actions.width * .22f, actions.height), T("Пас", "Pass"), panel, match.Actor == 0))
-                { match.PassGo(); ResetHandSelection(); illegalGoMove = false; cardAnnouncementUntil = 0; CreditResult(); GUIUtility.ExitGUI(); }
-                float deckStart = match.Go == null ? .59f : .65f;
-                Framed(new Rect(actions.x + actions.width * deckStart, actions.y, actions.width * (1 - deckStart), actions.height), Blue, 14, 3);
-                Label(new Rect(actions.x + actions.width * deckStart, actions.y, actions.width * (1 - deckStart), actions.height), T("Колода: ", "Deck: ") + match.DeckCount + T("\nСброс: ", "\nDiscard: ") + match.DiscardCount, 18, muted, true);
-            }
-            if (!portrait && match.Phase != MatchPhase.Finished)
-            {
-                var log = match.GetLog(English);
-                string lines = "";
-                for (int i = Math.Max(0, log.Count - 2); i < log.Count; i++) lines += log[i] + "\n";
-                Framed(new Rect(right, 584, width, 56), RoyalDeep, 12, 2);
-                Label(new Rect(right + 12, 584, width - 24, 56), lines, 16, muted);
-            }
-        }
-        void DrawGoScoring(float x, float y, float width)
-        {
-            Framed(new Rect(x, y, width, 232), RoyalDeep, 20, 4);
+            float x = area.x, y = area.y, width = area.width;
+            Framed(area, MatchBurgundy, 20, 4);
             Label(new Rect(x + 18, y + 16, width - 36, 54), match.GetGoScoreText(English), 30, gold, true, true);
             Label(new Rect(x + 24, y + 75, width - 48, 40), T("У белых уже учтены 7,5 очка коми.", "White's score includes 7.5 komi."), 20, muted, true);
-            Label(new Rect(x + 24, y + 122, width - 48, 84),
+            Label(new Rect(x + 24, y + 122, width - 48, Math.Max(40, area.height - 138)),
                 T("Нажми на камень в мёртвой группе, чтобы исключить всю группу из подсчёта. Повторное нажатие возвращает группу.", "Tap a dead group to exclude it from the score. Tap again to restore it."), 23, ink);
 
-            Rect actions = Region(ScreenBlock.Actions, new Rect(x, portrait ? 1200 : 650, width, 54));
+            Rect actions = MatchRegion(ScreenBlock.Actions);
             float buttonWidth = (actions.width - 16) / 2;
             if (Button(new Rect(actions.x, actions.y, buttonWidth, actions.height), T("Продолжить игру", "Resume play"), panel))
             {
@@ -406,7 +322,7 @@ namespace ChessCards
             bool canMove = active && domino.HasPlacement(match.HumanSide);
             float tileWidth = (r.width - 62) / 7;
             float tileHeight = 30;
-            Framed(r, RoyalDeep, 20, 5);
+            Framed(r, MatchVelvet, 20, 5);
             Label(new Rect(r.x + 16, r.y + 6, r.width - 32, 33), T("Цепочка", "Chain"), 24, gold, false, true);
             if (domino.Chain.Count == 0)
                 Label(new Rect(r.x + 16, r.y + 44, r.width - 32, 70), T("Первой можно выложить любую костяшку.", "Any tile can start the chain."), 20, muted, true);
@@ -577,20 +493,6 @@ namespace ChessCards
         {
             if (card.Kind != CardKind.Number) return card.GetTitle(English);
             return card.Number == 1 ? T("ХОД", "MOVE") : T("ХОДА", "MOVES");
-        }
-        void DrawCards(float x, float y, float width)
-        {
-            Card shown = match.Top;
-            bool preview = match.Actor == 1 && pendingBotCard >= 0 && pendingBotCard < match.Hands[1].Count;
-            if (preview) shown = match.Hands[1][pendingBotCard];
-            Framed(new Rect(x, y, width, 94), Royal, 17, 4);
-            Framed(new Rect(x, y + 99, width, 222), RoyalDeep, 16, 3);
-            DrawCardFace(new Rect(x + 14, y + 5, 58, 81), shown, preview);
-            Label(new Rect(x + 90, y + 8, width - 202, 25), preview ? T("БОТ ПОКАЗЫВАЕТ КАРТУ", "BOT REVEALS A CARD") : T("ВЕРХНЯЯ КАРТА СБРОСА", "TOP DISCARD"), 16, preview ? gold : muted);
-            Label(new Rect(x + 90, y + 34, width - 202, 40), shown.GetColorName(English) + " «" + shown.GetTitle(English) + "»", 24, ink, false, true);
-            if (cardBack != null) GUI.DrawTexture(new Rect(x + width - 67, y + 7, 46, 64), cardBack);
-            Label(new Rect(x + width - 90, y + 72, 90, 20), T("БОТ ×", "BOT ×") + match.Hands[1].Count, 15, muted, true);
-            DrawHand(x, y, width);
         }
         void Overlay(Rect r, string title)
         {
