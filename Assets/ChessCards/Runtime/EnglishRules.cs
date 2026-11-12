@@ -2,7 +2,7 @@ namespace ChessCards
 {
     static class EnglishRules
     {
-        const string Cards = "CARDS\nPlay one card per turn, matching the color or value of the top discard. A number card gives 1–3 consecutive board actions. When no card matches, draw one. You can play it immediately if it matches. Otherwise your turn ends. The discard is reshuffled when the deck runs out, leaving the top card in place.\n\n";
+        const string Cards = "CARDS\nChoose a card to raise it, then press it again to play it. Play one card per turn, matching the color or value of the top discard. A number card gives 1–3 consecutive board actions. When no card matches, draw one. You can play it immediately if it matches. Otherwise your turn ends. The discard is reshuffled when the deck runs out, leaving the top card in place.\n\n";
         const string Reward = "\n\nREWARD\nA win earns 100 coins for the royal courtyard. Coins and repairs are saved between sessions.";
         const string Specials = "SPECIAL CARDS\nSwap exchanges sides. Undo reverses the last board action. Neither returns cards to the hand. Skip gives one action, then the opponent skips their turn.\n\n";
 

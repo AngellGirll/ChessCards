@@ -99,8 +99,8 @@ namespace UnityEngine
     public class GUISkin {public GUIStyle label=new GUIStyle(),button=new GUIStyle();}
     public static class Mathf {public static float Min(float a,float b){return Math.Min(a,b);} }
     public static class Screen {public static int width=1280,height=720;public static Rect safeArea{get{return new Rect(0,0,width,height);}}}
-    public static class Application {public static int targetFrameRate;}
-    public static class Time {public static float unscaledTime;}
+    public static class Application {public static int targetFrameRate; public static bool isMobilePlatform;}
+    public static class Time {public static float unscaledTime; public static float unscaledDeltaTime=1f/60;}
     public static class PlayerPrefs
     {
         static Dictionary<string,string> data=new Dictionary<string,string>();
@@ -320,7 +320,7 @@ static class UiSmoke
         var pieces=(UnityEngine.Texture2D[,])Get(app,"pieces");
         Check(pieces[0,7]!=null && pieces[1,7]!=null && pieces[0,8]!=null && pieces[1,8]!=null,"Checker resources missing");
         match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));
-        UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
+        PlayOnlyHandCard(app, 360, 1010);
         UnityEngine.GUI.Click(255,595);Draw(app,"Validation/Previews/transition.svg");
         Check((int)Get(app,"selected")==18,"Checker selection click failed");
         UnityEngine.GUI.Click(325,525);Draw(app,"Validation/Previews/transition.svg");
@@ -338,7 +338,7 @@ static class UiSmoke
         match=new CardMatch(3,board);Set(app,"match",match);
         match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));
         UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
-        UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
+        PlayOnlyHandCard(app, 360, 1010);
         UnityEngine.GUI.Click(255,595);Draw(app,"Validation/Previews/transition.svg");
         UnityEngine.GUI.Click(395,455);Draw(app,"Validation/Previews/transition.svg");
         Check((int)Get(app,"selected")==36 && match.Board.ForcedCaptureFrom==36 && match.Remaining==1,"Capture continuation not auto-selected");
@@ -364,7 +364,7 @@ static class UiSmoke
         var match=(CardMatch)Get(app,"match");
         Check(match.Mode==GameMode.Go && match.HumanSide==Side.Black,"Go selector starts the human as Black");
         match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,2));
-        UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
+        PlayOnlyHandCard(app, 360, 1010);
         UnityEngine.GUI.Click(360,490);Draw(app,"Validation/Previews/transition.svg");
         Check(match.Go.StoneAt(40)==Side.Black && match.Remaining==1,"Go center intersection click");
         Draw(app,"Validation/Previews/go-portrait.svg");
@@ -394,7 +394,7 @@ static class UiSmoke
         match=(CardMatch)Get(app,"match");
         Check(match.Mode==GameMode.Domino,"Domino choice starts a domino match");
         match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));
-        UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
+        PlayOnlyHandCard(app, 360, 1010);
         UnityEngine.GUI.Click(131,586);Draw(app,"Validation/Previews/transition.svg");
         Check((int)Get(app,"selected")==0,"Domino rack click selects first tile");
         UnityEngine.GUI.Click(220,460);Draw(app,"Validation/Previews/transition.svg");
@@ -404,6 +404,68 @@ static class UiSmoke
         Draw(app,"Validation/Previews/domino-landscape.svg");
         Console.WriteLine("PASS Go and domino selection, Go intersection and pass, domino rack and chain controls");
     }
+    static void PlayOnlyHandCard(ChessCardsApp app, float x, float y)
+    {
+        for (int press = 0; press < 2; press++)
+        {
+            UnityEngine.GUI.Click(x, y);
+            Draw(app, "Validation/Previews/transition.svg");
+        }
+    }
+
+    static void OverlappingHandSmoke()
+    {
+        UnityEngine.Screen.width = 720; UnityEngine.Screen.height = 1280;
+        UnityEngine.Application.isMobilePlatform = true;
+        var app = new ChessCardsApp(); Call(app, "Awake");
+        var match = new CardMatch(17);
+        Set(app, "match", match);
+        Set(app, "location", false);
+        var hand = match.Hands[0];
+        hand.Clear();
+        hand.AddRange(new[] { new Card(match.Top.Color, 1), new Card(match.Top.Color, 1),
+            new Card(match.Top.Color, 2), new Card(match.Top.Color, 1), new Card(match.Top.Color, 3) });
+
+        Draw(app, "Validation/Previews/hand-five-portrait.svg");
+        var slots = (List<UnityEngine.Rect>)Get(app, "handSlots");
+        Check(slots.Count == 5 && slots[1].x < slots[0].x + slots[0].width, "All five cards are laid out with overlap");
+        var overlap = slots[2];
+        UnityEngine.GUI.Click(overlap.x + 5, overlap.y + 60);
+        Draw(app, "Validation/Previews/transition.svg");
+        Check((int)Get(app, "selectedHandCard") == 2 && match.Phase == MatchPhase.ChooseCard && hand.Count == 5,
+            "First tap selects the visible top card without playing it");
+        UnityEngine.GUI.Hover(-1, -1);
+        for (int frame = 0; frame < 8; frame++) Draw(app, "Validation/Previews/hand-raised-portrait.svg");
+        Check(((float[])Get(app, "handLifts"))[2] >= 16, "Touch selection animates to the raised position");
+        UnityEngine.GUI.Click(overlap.x + overlap.width - 3, overlap.y + 60);
+        Draw(app, "Validation/Previews/transition.svg");
+        Check(match.Top.Number == 2 && match.Remaining == 2 && hand.Count == 4 && (int)Get(app, "selectedHandCard") == -1,
+            "Second tap plays exactly the selected card");
+
+        match = new CardMatch(19);
+        Set(app, "match", match);
+        hand = match.Hands[0];
+        hand.Clear();
+        hand.Add(new Card((match.Top.Color + 1) % 4, CardKind.Skip));
+        PlayOnlyHandCard(app, 360, 1010);
+        Check(match.Phase == MatchPhase.ChooseCard && hand.Count == 1, "Selecting an unavailable card never plays it");
+
+        Call(app, "ResetHandSelection");
+        hand.Clear();
+        for (int i = 0; i < 40; i++) hand.Add(new Card(i % 4, 1 + i % 3));
+        Draw(app, "Validation/Previews/hand-large-portrait.svg");
+        Check(slots.Count == 40 && slots[39].y > slots[0].y, "Large hands fit without hiding any card");
+        UnityEngine.Application.isMobilePlatform = false;
+        UnityEngine.Screen.width = 1280; UnityEngine.Screen.height = 720;
+        Draw(app, "Validation/Previews/hand-large-landscape.svg");
+        var last = slots[39];
+        UnityEngine.GUI.Hover(last.x + last.width - 7, last.y + 25);
+        Draw(app, "Validation/Previews/hand-hover-landscape.svg");
+        Check(slots.Count == 40 && ((float[])Get(app, "handLifts"))[39] > 0, "Last card in large landscape hand is reachable");
+        UnityEngine.GUI.Hover(-1, -1);
+        Console.WriteLine("PASS full hands, overlapped hit targets, touch selection, hover lift and confirmed play");
+    }
+
     static void LandscapeGameplay()
     {
         UnityEngine.Screen.width = 1280; UnityEngine.Screen.height = 720;
@@ -415,7 +477,7 @@ static class UiSmoke
         Check(match.Mode == GameMode.Domino && !(bool)Get(app, "portrait"), "Landscape mode choice");
         match.Hands[0].Clear();
         match.Hands[0].Add(new Card(match.Top.Color, 1));
-        UnityEngine.GUI.Click(665, 390); Draw(app, "Validation/Previews/transition.svg");
+        PlayOnlyHandCard(app, 915, 390);
         Check(match.Phase == MatchPhase.MovePieces, "Landscape card hitbox");
         UnityEngine.GUI.Click(95, 565); Draw(app, "Validation/Previews/transition.svg");
         Check((int)Get(app, "selected") == 0, "Landscape rack hitbox");
@@ -578,7 +640,7 @@ static class UiSmoke
         Draw(app,"Validation/Previews/cards-royal-landscape.svg");
         UnityEngine.Screen.width=720;UnityEngine.Screen.height=1280;
         match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));
-        UnityEngine.GUI.Click(100,1010);Draw(app,"Validation/Previews/transition.svg");
+        PlayOnlyHandCard(app, 360, 1010);
         Check(match.Phase==MatchPhase.MovePieces,"Card click failed");
         var move=match.Board.LegalMoves(match.HumanSide)[0];
         bool white=match.HumanSide==Side.White;
@@ -605,6 +667,7 @@ static class UiSmoke
         CheckersModeSmoke();
         GoDominoModeSmoke();
         LandscapeGameplay();
+        OverlappingHandSmoke();
         HoverAndRulesSmoke();
         PortraitCourtyardRepair();
         SettingsSmoke();
