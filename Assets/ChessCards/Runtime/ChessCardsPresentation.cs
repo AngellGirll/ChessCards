@@ -36,6 +36,7 @@ namespace ChessCards
             const string art = "ChessCards/Royal/";
             courtyard = Resources.Load<Texture2D>(art + "Courtyard");
             restoredCourtyard = Resources.Load<Texture2D>(art + "RestoredCourtyard");
+            LoadCourtyardStyle(art);
             gameRoom = Resources.Load<Texture2D>(art + "GameRoom");
             string[] modeNames = { "Chess", "Checkers", "Go", "Domino" };
             string[] repairNames = { "Bench", "Lantern", "Cottage" };

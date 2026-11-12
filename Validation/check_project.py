@@ -62,6 +62,7 @@ for side in ['White', 'Black']:
         assert (resources / (side + piece + '.png')).is_file()
 for asset in ['Courtyard.jpg', 'RestoredCourtyard.jpg', 'GameRoom.jpg', 'Chess.png', 'ChessPieces.png', 'Checkers.png', 'Go.png',
               'Domino.png', 'Bench.png', 'Lantern.png', 'Cottage.png', 'Coin.png',
+              'YardCrown.png', 'YardCrest.png', 'YardCorner.png',
               'CourtyardMusic.ogg', 'Click.ogg', 'Move.ogg', 'Win.ogg']:
     assert (resources / 'Royal' / asset).is_file(), 'Missing presentation asset: ' + asset
 assert (resources / 'UI.ttf').is_file()

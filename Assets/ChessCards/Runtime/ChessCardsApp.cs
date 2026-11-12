@@ -193,7 +193,7 @@ namespace ChessCards
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(new Vector3(ox, oy, 0), Quaternion.identity, new Vector3(scale, scale, 1));
             bool blocked = settingsOpen || modeSelection || rules || historyOpen || confirmLeave || promotions != null;
-            Backdrop(location ? courtyard : gameRoom, location ? .50f : .63f);
+            if (!location) Backdrop(gameRoom, .63f);
             GUI.enabled = !blocked;
             if (location) DrawLocation(); else DrawMatch();
             GUI.enabled = true;
@@ -241,112 +241,6 @@ namespace ChessCards
             GUI.enabled = old;
             if (clicked) Feedback(clickSound);
             return clicked;
-        }
-
-        string RepairName(int index)
-        {
-            if (index == 0) return T("Скамейка", "Bench");
-            return index == 1 ? T("Фонарь", "Lantern") : T("Дом", "Cottage");
-        }
-
-        void DrawLocation()
-        {
-            float headerWidth = portrait ? 412 : 626;
-            Banner(new Rect(26, 20, headerWidth, 65), T("КОРОЛЕВСКИЙ ДВОР", "ROYAL COURTYARD"), portrait ? 29 : 35);
-            var wallet = new Rect(w - 267, 25, 164, 55);
-            Framed(wallet, Blue);
-            DrawCoin(new Rect(wallet.x + 8, wallet.y + 6, 43, 43));
-            Label(new Rect(wallet.x + 53, wallet.y, wallet.width - 66, wallet.height), progress.Coins.ToString(), 26, ink, true, true);
-            if (Button(new Rect(w - 91, 25, 64, 55), "⚙", Royal, true, 29)) settingsOpen = true;
-
-            int repaired = (progress.Bench ? 1 : 0) + (progress.Lamp ? 1 : 0) + (progress.House ? 1 : 0);
-            string status = T("Восстановлено ", "Restored ") + repaired + "/3    •    " + T("Побед ", "Wins ") + progress.Wins;
-            Framed(new Rect(28, 94, portrait ? 664 : 728, 38), RoyalDeep, 12, 2);
-            Label(new Rect(42, 95, portrait ? 636 : 700, 36), status, 19, ink, true, true);
-            DrawCourtyard(portrait ? new Rect(28, 148, 664, 640) : new Rect(28, 148, 728, 440), repaired == 3);
-
-            for (int i = 0; i < 3; i++)
-            {
-                Rect tile = portrait ? new Rect(28 + 225 * i, 809, 214, 213) : new Rect(790, 145 + i * 128, 458, 115);
-                DrawRepair(tile, i);
-            }
-
-            string notice = T("Выигрывай партии и возвращай жизнь старому двору.", "Win games to bring the royal courtyard back to life.");
-            if (lastRepair >= 0)
-                notice = RepairName(lastRepair) + T(" • ремонт завершён!", " • repair complete!");
-            else if (showLastResult && match != null)
-                notice = match.Winner == 0 ? T("Победа! +100 монет на ремонт.", "You win! +100 coins for repairs.") : match.GetResult(English);
-            float noteY = portrait ? 1045 : 597;
-            Framed(new Rect(32, noteY, w - 64, portrait ? 58 : 45), RoyalDeep, 13, 2);
-            Label(new Rect(48, noteY, w - 96, portrait ? 58 : 45), notice, 20, ink, true);
-
-            float by = portrait ? 1130 : 650, buttonHeight = portrait ? 68 : 48;
-            float buttonWidth = portrait ? 512 : 690;
-            string play = T("ИГРАТЬ", "PLAY") + (preferences.Selection == ModeSelection.Random ? T("  •  РАНДОМ", "  •  RANDOM") : "");
-            if (Button(new Rect((w - buttonWidth) / 2, by, buttonWidth, buttonHeight), play, Green, true, 27))
-            { PlayFromCourtyard(); GUIUtility.ExitGUI(); }
-            Label(new Rect(32, portrait ? 1214 : 703, w - 64, portrait ? 33 : 17),
-                T("+100 монет за победу", "+100 coins per win"), portrait ? 20 : 16, gold, true, true);
-        }
-
-        void DrawCourtyard(Rect r, bool restored)
-        {
-            Framed(r, RoyalDeep, 20, 5);
-            Rect view = Inset(r, 7);
-            var art = restored && restoredCourtyard != null ? restoredCourtyard : courtyard;
-            if (art != null) GUI.DrawTexture(view, art, ScaleMode.ScaleAndCrop);
-            if (!restored && courtyard != null && restoredCourtyard != null)
-            {
-                if (progress.House) DrawRestoredArea(view, new Rect(.405f, .018f, .49f, .49f));
-                if (progress.Bench) DrawRestoredArea(view, new Rect(.243f, .444f, .247f, .310f));
-                if (progress.Lamp) DrawRestoredArea(view, new Rect(.329f, .195f, .090f, .180f));
-            }
-            if (restored)
-                Banner(new Rect(r.x + 18, r.y + r.height - 64, r.width - 36, 47), T("ДВОР ВОССТАНОВЛЕН", "COURTYARD RESTORED"), 23);
-        }
-
-        void DrawRestoredArea(Rect view, Rect patch)
-        {
-            float scale = Math.Max(view.width / restoredCourtyard.width, view.height / restoredCourtyard.height);
-            float width = restoredCourtyard.width * scale, height = restoredCourtyard.height * scale;
-            float x = view.x + (view.width - width) / 2, y = view.y + (view.height - height) / 2;
-            float left = Math.Max(view.x, x + patch.x * width);
-            float top = Math.Max(view.y, y + patch.y * height);
-            float right = Math.Min(view.x + view.width, x + (patch.x + patch.width) * width);
-            float bottom = Math.Min(view.y + view.height, y + (patch.y + patch.height) * height);
-            if (right <= left || bottom <= top) return;
-            GUI.BeginGroup(new Rect(left, top, right - left, bottom - top));
-            GUI.DrawTexture(new Rect(x - left, y - top, width, height), restoredCourtyard);
-            GUI.EndGroup();
-        }
-
-        void DrawRepair(Rect r, int index)
-        {
-            bool repaired = progress.Repaired(index);
-            Framed(r, repaired ? Teal : Royal, 19, 4);
-            var icon = repairArt[index];
-            Rect art = portrait ? new Rect(r.x + 27, r.y + 11, r.width - 54, 107) : new Rect(r.x + 12, r.y + 8, 111, r.height - 16);
-            if (icon != null) GUI.DrawTexture(art, icon, ScaleMode.ScaleToFit);
-            float nameX = r.x + (portrait ? 10 : 132), nameY = r.y + (portrait ? 115 : 8);
-            float nameW = r.width - (portrait ? 20 : 147);
-            Label(new Rect(nameX, nameY, nameW, 36), RepairName(index), 23, gold, portrait, true);
-            var action = portrait ? new Rect(r.x + 10, r.y + 159, r.width - 20, 43) : new Rect(r.x + r.width - 245, r.y + 75, 225, 32);
-            if (!portrait)
-            {
-                string detail = index == 0 ? T("Починить сиденье и спинку", "Repair the seat and back") :
-                    index == 1 ? T("Вернуть свет во двор", "Bring light back to the courtyard") :
-                    T("Восстановить крышу и фасад", "Restore the roof and facade");
-                Label(new Rect(nameX, r.y + 44, nameW, 28), detail, 16, muted);
-            }
-            string price = RestorationProgress.Prices[index].ToString();
-            if (Button(action, repaired ? T("✓ Готово", "✓ Restored") : "    " + price, repaired ? Teal : Green,
-                !repaired && progress.Coins >= RestorationProgress.Prices[index], 19))
-            {
-                progress.Repair(index);
-                lastRepair = index;
-                Save();
-            }
-            if (!repaired) DrawCoin(new Rect(action.x + action.width / 2 - 36, action.y + (action.height - 26) / 2, 26, 26));
         }
 
         string MatchStatus()

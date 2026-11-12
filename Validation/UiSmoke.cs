@@ -161,9 +161,16 @@ namespace UnityEngine
             if (texture.Colors != null)
             {
                 string id = "gradient" + (clip++);
-                svg.Append("<defs><linearGradient id='" + id + "' x2='0%' y2='100%'><stop offset='0%' stop-color='" +
-                    texture.Colors[^1].Css() + "'/><stop offset='100%' stop-color='" + texture.Colors[0].Css() +
-                    "'/></linearGradient></defs>");
+                svg.Append("<defs><linearGradient id='" + id + "' x2='0%' y2='100%'>");
+                int stops = texture.width == 1 ? 4 : 1;
+                for (int i = 0; i <= stops; i++)
+                {
+                    int sample = (texture.height - 1) * (stops - i) / stops * texture.width;
+                    Color shade = texture.Colors[sample];
+                    svg.Append("<stop offset='" + i * 100 / stops + "%' stop-color='" + shade.Css() +
+                        "' stop-opacity='" + shade.a + "'/>");
+                }
+                svg.Append("</linearGradient></defs>");
                 fill = "url(#" + id + ")";
             }
             svg.Append("<rect x='" + (r.x+ox) + "' y='" + (r.y+oy) + "' width='" + r.width + "' height='" +
@@ -172,8 +179,18 @@ namespace UnityEngine
         public static void DrawTextureWithTexCoords(Rect r, Texture2D texture, Rect uv)
         {
             BeginGroup(r);
-            float width = r.width / uv.width, height = r.height / uv.height;
-            DrawTexture(new Rect(-uv.x * width, -(1 - uv.y - uv.height) * height, width, height), texture);
+            bool flipX = uv.width < 0, flipY = uv.height < 0;
+            if (flipX || flipY)
+            {
+                float tx = flipX ? 2 * ox + r.width : 0;
+                float ty = flipY ? 2 * oy + r.height : 0;
+                svg.Append("<g transform='translate(" + tx + " " + ty + ") scale(" +
+                    (flipX ? -1 : 1) + " " + (flipY ? -1 : 1) + ")'>");
+            }
+            float ux = flipX ? uv.x + uv.width : uv.x, uy = flipY ? uv.y + uv.height : uv.y;
+            float width = r.width / Math.Abs(uv.width), height = r.height / Math.Abs(uv.height);
+            DrawTexture(new Rect(-ux * width, -(1 - uy - Math.Abs(uv.height)) * height, width, height), texture);
+            if (flipX || flipY) svg.Append("</g>");
             EndGroup();
         }
         static readonly Dictionary<string,string> textureData = new Dictionary<string,string>();
@@ -391,7 +408,7 @@ static class UiSmoke
     {
         UnityEngine.Screen.width = 1280; UnityEngine.Screen.height = 720;
         var app = new ChessCardsApp(); Call(app, "Awake");
-        UnityEngine.GUI.Click(350, 680); Draw(app, "Validation/Previews/transition.svg");
+        UnityEngine.GUI.Click(400, 615); Draw(app, "Validation/Previews/transition.svg");
         Check((bool)Get(app, "modeSelection"), "Landscape Play opens mode selector");
         UnityEngine.GUI.Click(855, 430); Draw(app, "Validation/Previews/transition.svg");
         var match = (CardMatch)Get(app, "match");
@@ -423,7 +440,7 @@ static class UiSmoke
         Check(!courtyard.Contains(">Правила<"), "Rules should only be available during a match");
         Check(courtyard == HoverFrame(app, 200, 50), "Courtyard heading must not change on hover");
         Check(courtyard != HoverFrame(app, 350, 1160), "Enabled Play button shows hover feedback");
-        Check(courtyard == HoverFrame(app, 137, 990), "Unaffordable repair must not change on hover");
+        Check(courtyard == HoverFrame(app, 580, 935), "Unaffordable repair must not change on hover");
 
         UnityEngine.GUI.Click(650, 50); Draw(app, "Validation/Previews/transition.svg");
         Check((bool)Get(app, "settingsOpen"), "Open Settings for modal hover test");
@@ -441,6 +458,36 @@ static class UiSmoke
         Check((bool)Get(app, "rules") && HoverFrame(app, -1, -1).Contains("Русские шашки на доске"),
             "Rules button in a match shows the active game's rules");
         Console.WriteLine("PASS hover on enabled buttons only, static headings, modal input blocking and match-specific rules");
+    }
+
+    static void PortraitCourtyardRepair()
+    {
+        const string saveKey = "ChessCards.Restoration.v1";
+        string saved = UnityEngine.PlayerPrefs.GetString(saveKey, "{}");
+        try
+        {
+            UnityEngine.Screen.width = 720; UnityEngine.Screen.height = 1280;
+            var app = new ChessCardsApp(); Call(app, "Awake");
+            var progress = (RestorationProgress)Get(app, "progress");
+            Check(progress.Bench && progress.Coins == 40, "Load repaired courtyard state in portrait");
+            Check(Get(app,"yardCrown") != null && Get(app,"yardCrest") != null && Get(app,"yardCorner") != null,
+                "Missing courtyard ornaments");
+            Draw(app, "Validation/Previews/repaired-portrait.svg");
+            string before = File.ReadAllText("Validation/Previews/repaired-portrait.svg");
+            Check(before.Contains(">1 из 3<") && before.Contains(">✓ Готово<"), "Show progress and repaired state");
+            UnityEngine.GUI.Click(585, 936); Draw(app, "Validation/Previews/transition.svg");
+            Check(!progress.Lamp && progress.Coins == 40, "Unaffordable portrait repair is inactive");
+
+            progress.Coins = 100;
+            UnityEngine.GUI.Click(585, 936); Draw(app, "Validation/Previews/transition.svg");
+            Check(progress.Lamp && progress.Coins == 0, "Portrait repair costs the correct amount");
+            Check(HoverFrame(app, -1, -1).Contains(">2 из 3<"), "Portrait progress updates immediately");
+            Console.WriteLine("PASS full-bleed courtyard controls, portrait repair affordability and progress");
+        }
+        finally
+        {
+            UnityEngine.PlayerPrefs.SetString(saveKey, saved);
+        }
     }
 
     static void SettingsSmoke()
@@ -550,7 +597,7 @@ static class UiSmoke
         match=new CardMatch(1,p);match.Hands[0].Clear();match.Hands[0].Add(new Card(match.Top.Color,1));match.PlayCard(0);match.Move(new ChessMove(46,54));
         Set(app,"match",match);Set(app,"credited",false);Call(app,"CreditResult");Call(app,"CreditResult");
         var progress=(RestorationProgress)Get(app,"progress");Check(progress.Coins==100,"Reward duplicated");
-        Set(app,"location",true);UnityEngine.GUI.Click(1100,240);Draw(app,"Validation/Previews/transition.svg");
+        Set(app,"location",true);UnityEngine.GUI.Click(1176,291);Draw(app,"Validation/Previews/transition.svg");
         Check(progress.Bench&&progress.Coins==40,"Repair click failed");
         Draw(app,"Validation/Previews/repaired-landscape.svg");
         var reloaded=new ChessCardsApp();Call(reloaded,"Awake");var saved=(RestorationProgress)Get(reloaded,"progress");
@@ -559,6 +606,7 @@ static class UiSmoke
         GoDominoModeSmoke();
         LandscapeGameplay();
         HoverAndRulesSmoke();
+        PortraitCourtyardRepair();
         SettingsSmoke();
         Console.WriteLine("PASS runtime source compilation against isolated adapter; GUI clicks, card selection, board input, mate reward, repair and save/reload");
         Console.WriteLine("Layout previews emitted. This does not replace testing in Unity Editor or a device build.");
